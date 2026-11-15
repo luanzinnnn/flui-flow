@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight, AudioLines, Clock3, Film, GitBranch, GripVertical, Image as ImageIcon,
-  ImagePlus, Mic, Play, Plus, SlidersHorizontal, Type, Video,
+  ImagePlus, Layers, Mic, Play, Plus, SlidersHorizontal, Type, Video,
 } from 'lucide-react'
-import { NODE_TYPES } from '../data/flowData'
+import { BLOCK_META, NODE_TYPES } from '../data/flowData'
 import { useMediaSrc } from '../lib/useMediaSrc'
+import { getBlockKinds, isMessageNode } from '../lib/content'
 import AudioPlayer from './AudioPlayer'
 import RichText from './RichText'
 
@@ -17,6 +18,13 @@ const TYPE_ICON = {
   delay: Clock3,
 }
 
+const BLOCK_ICON = {
+  text: Type,
+  audio: Mic,
+  image: ImageIcon,
+  video: Video,
+}
+
 function AutoGrowTextarea({ value, onChange, onBlur, placeholder }) {
   const ref = useRef(null)
 
@@ -24,7 +32,7 @@ function AutoGrowTextarea({ value, onChange, onBlur, placeholder }) {
     const el = ref.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.max(72, el.scrollHeight)}px`
+    el.style.height = `${Math.max(74, el.scrollHeight)}px`
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
   }, [])
@@ -32,7 +40,7 @@ function AutoGrowTextarea({ value, onChange, onBlur, placeholder }) {
   return (
     <textarea
       ref={ref}
-      className="node-edit"
+      className="node-edit node-block-edit"
       value={value}
       placeholder={placeholder}
       rows={2}
@@ -43,7 +51,7 @@ function AutoGrowTextarea({ value, onChange, onBlur, placeholder }) {
       onChange={(e) => {
         onChange(e.target.value)
         e.target.style.height = 'auto'
-        e.target.style.height = `${Math.max(72, e.target.scrollHeight)}px`
+        e.target.style.height = `${Math.max(74, e.target.scrollHeight)}px`
       }}
       onBlur={onBlur}
       onKeyDown={(e) => {
@@ -56,7 +64,7 @@ function AutoGrowTextarea({ value, onChange, onBlur, placeholder }) {
   )
 }
 
-function MediaMissing({ kind, onPickMedia, node }) {
+function MediaMissing({ kind, node, block, onPickBlockMedia }) {
   const icons = { image: ImagePlus, video: Film, audio: AudioLines }
   const Icon = icons[kind] || ImagePlus
   const copy = {
@@ -65,46 +73,17 @@ function MediaMissing({ kind, onPickMedia, node }) {
     audio: 'Adicionar um áudio',
   }[kind]
   return (
-    <button type="button" className="node-media-missing" onClick={() => onPickMedia(node)} data-no-drag>
+    <button
+      type="button"
+      className="node-media-missing"
+      onClick={() => onPickBlockMedia(node, block)}
+      data-no-drag
+    >
       <span className="media-missing-icon"><Icon size={18} /></span>
       <span>{copy}</span>
       <span className="media-missing-hint">clique para escolher</span>
     </button>
   )
-}
-
-function MediaContent({ node, onPickMedia }) {
-  const src = useMediaSrc(node.mediaId)
-  const finalSrc = src || node.media?.src
-
-  if (node.type === 'audio') {
-    if (!finalSrc) return <MediaMissing kind="audio" node={node} onPickMedia={onPickMedia} />
-    return (
-      <div className="node-audio" style={{ '--accent': node.accent }}>
-        <AudioPlayer src={finalSrc} accent={node.accent} />
-        <div className="audio-caption">
-          <AudioLines size={12} />
-          <span>áudio · toque para ouvir</span>
-        </div>
-      </div>
-    )
-  }
-
-  if (node.type === 'image') {
-    if (!finalSrc) return <MediaMissing kind="image" node={node} onPickMedia={onPickMedia} />
-    return (
-      <div className="node-photo" data-no-drag>
-        <img src={finalSrc} alt={node.title || 'Foto do fluxo'} draggable="false" loading="lazy" />
-        <span className="media-tag"><ImageIcon size={11} /> foto</span>
-      </div>
-    )
-  }
-
-  if (node.type === 'video') {
-    if (!finalSrc) return <MediaMissing kind="video" node={node} onPickMedia={onPickMedia} />
-    return <VideoBlock src={finalSrc} poster={node.media?.poster} />
-  }
-  return null
 }
 
 function VideoBlock({ src, poster }) {
@@ -145,14 +124,66 @@ function VideoBlock({ src, poster }) {
   )
 }
 
+function MediaBlockView({ node, block, onPickBlockMedia }) {
+  const resolved = useMediaSrc(block.mediaId)
+  const src = resolved || block.media?.src
+
+  if (!src) {
+    return <MediaMissing kind={block.kind} node={node} block={block} onPickBlockMedia={onPickBlockMedia} />
+  }
+
+  if (block.kind === 'audio') {
+    return (
+      <div className="node-audio" style={{ '--accent': node.accent }}>
+        <AudioPlayer src={src} accent={node.accent} />
+      </div>
+    )
+  }
+
+  if (block.kind === 'image') {
+    return (
+      <div className="node-photo">
+        <img src={src} alt={block.media?.name || node.title || 'Foto do fluxo'} draggable="false" loading="lazy" />
+        <span className="media-tag"><ImageIcon size={11} /> foto</span>
+      </div>
+    )
+  }
+
+  if (block.kind === 'video') {
+    return <VideoBlock src={src} poster={block.media?.poster} />
+  }
+
+  return null
+}
+
 export default function NodeCard({
-  node, selected, isTarget, connecting, editing, outEdges,
+  node, selected, isTarget, connecting, editingBlockId, outEdges,
   onMeasure, onPointerDown, onStartConnect, onOpen, onDoubleClick,
-  onTextChange, onEndEdit, onPickMedia,
+  onStartEditBlock, onBlockTextChange, onEndEditBlock, onPickBlockMedia,
+  onDropAsset,
 }) {
   const ref = useRef(null)
-  const Icon = TYPE_ICON[node.type] || Type
+  const dragDepth = useRef(0)
+  const [dragOver, setDragOver] = useState(false)
   const start = node.type === 'start'
+  const message = isMessageNode(node)
+  const blocks = Array.isArray(node.blocks) ? node.blocks : []
+  const kinds = getBlockKinds(node)
+  const oneKind = kinds.length === 1 ? kinds[0] : null
+  let Icon = TYPE_ICON[node.type] || Type
+  let headerLabel = NODE_TYPES[node.type]?.label || 'Balão'
+  if (message) {
+    if (oneKind) {
+      Icon = BLOCK_ICON[oneKind] || Layers
+      headerLabel = NODE_TYPES[oneKind]?.label || BLOCK_META[oneKind]?.label || 'Conteúdo'
+    } else if (kinds.length > 1) {
+      Icon = Layers
+      headerLabel = 'Conteúdo'
+    } else {
+      Icon = Layers
+      headerLabel = 'Mensagem'
+    }
+  }
 
   useEffect(() => {
     const el = ref.current
@@ -168,13 +199,47 @@ export default function NodeCard({
     return () => ro.disconnect()
   }, [node.id, onMeasure])
 
+  const hasDragPayload = (e) => {
+    const types = Array.from(e.dataTransfer?.types || [])
+    return types.includes('application/x-flui-asset') || types.includes('text/plain')
+  }
+
+  const onDragEnter = (e) => {
+    if (!message || !hasDragPayload(e)) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragOver(true)
+  }
+  const onDragOver = (e) => {
+    if (!message || !hasDragPayload(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const onDragLeave = (e) => {
+    if (!message) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragOver(false)
+  }
+  const onDrop = (e) => {
+    if (!message) return
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepth.current = 0
+    setDragOver(false)
+    const assetId = e.dataTransfer.getData('application/x-flui-asset')
+      || (e.dataTransfer.getData('text/plain')?.startsWith('flui:') ? e.dataTransfer.getData('text/plain').slice(5) : '')
+    if (assetId) onDropAsset(node.id, assetId)
+  }
+
   const cls = [
     'node',
     start ? 'node-start' : '',
     selected ? 'is-selected' : '',
     isTarget ? 'is-target' : '',
     connecting ? 'is-connecting' : '',
-    editing ? 'is-editing' : '',
+    editingBlockId ? 'is-editing' : '',
+    dragOver ? 'is-drop-target' : '',
     node.type === 'condition' ? 'node-condition' : '',
     node.type === 'delay' ? 'node-delay' : '',
   ].filter(Boolean).join(' ')
@@ -196,6 +261,10 @@ export default function NodeCard({
       data-node-id={node.id}
       onPointerDown={(e) => onPointerDown(e, node)}
       onDoubleClick={handleDoubleClick}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       {start ? (
         <div className="start-card">
@@ -213,7 +282,8 @@ export default function NodeCard({
             <span className="node-type-icon" style={{ color: node.accent, background: `${node.accent}18`, borderColor: `${node.accent}35` }}>
               <Icon size={14} />
             </span>
-            <span className="node-kind">{NODE_TYPES[node.type]?.label || 'Balão'}</span>
+            <span className="node-kind">{headerLabel}</span>
+            {message && blocks.length > 1 && <span className="node-block-count">{blocks.length}</span>}
             <button
               type="button"
               className="node-open"
@@ -254,28 +324,50 @@ export default function NodeCard({
                 <p className="delay-caption">de espera antes de continuar</p>
               </div>
             </div>
-          ) : (
-            <>
-              {(node.type === 'image' || node.type === 'video' || node.type === 'audio') && (
-                <MediaContent node={node} onPickMedia={onPickMedia} />
-              )}
-              {node.title && (
-                <h3 className="node-title">{node.title}</h3>
-              )}
-              {editing ? (
-                <AutoGrowTextarea
-                  value={node.text}
-                  placeholder="Escreva a mensagem…"
-                  onChange={onTextChange}
-                  onBlur={onEndEdit}
-                />
-              ) : node.text ? (
-                <p className="node-text"><RichText text={node.text} /></p>
+          ) : message ? (
+            <div className="node-message-content">
+              {node.title && <h3 className="node-title">{node.title}</h3>}
+              {blocks.length > 0 ? (
+                <div className="node-blocks">
+                  {blocks.map((block) => (
+                    <div className={`node-block node-block-${block.kind}`} key={block.id}>
+                      {block.kind === 'text' ? (
+                        editingBlockId === block.id ? (
+                          <AutoGrowTextarea
+                            value={block.text}
+                            placeholder="Escreva a mensagem…"
+                            onChange={(value) => onBlockTextChange(node, block, value)}
+                            onBlur={onEndEditBlock}
+                          />
+                        ) : (
+                          <div
+                            className="node-text-wrap"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation()
+                              onStartEditBlock(node, block)
+                            }}
+                          >
+                            {block.text ? (
+                              <p className="node-text"><RichText text={block.text} /></p>
+                            ) : (
+                              <p className="node-text is-placeholder">Escreva a mensagem…</p>
+                            )}
+                          </div>
+                        )
+                      ) : (
+                        <MediaBlockView node={node} block={block} onPickBlockMedia={onPickBlockMedia} />
+                      )}
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <p className="node-text is-placeholder">Escreva a mensagem…</p>
+                <div className="node-empty-content">
+                  <span><Plus size={12} /></span>
+                  Adicione texto ou mídia neste balão
+                </div>
               )}
-            </>
-          )}
+            </div>
+          ) : null}
 
           {!start && (
             <div className="node-foot">
@@ -298,6 +390,13 @@ export default function NodeCard({
             </div>
           )}
         </>
+      )}
+
+      {dragOver && (
+        <div className="node-drop-overlay" aria-hidden="true">
+          <span><ImagePlus size={19} /></span>
+          solte no balão
+        </div>
       )}
 
       {!start && (

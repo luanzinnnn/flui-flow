@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  Download, HelpCircle, LayoutGrid, Link2, MoreHorizontal, Play,
+  Download, FolderOpen, HelpCircle, LayoutGrid, Link2, MoreHorizontal, Play,
   Redo2, RotateCcw, Sparkles, Undo2, Upload,
 } from 'lucide-react'
 import Logo from './Logo'
@@ -8,6 +8,7 @@ import Logo from './Logo'
 export default function TopBar({
   title, onTitleChange, saveState, onUndo, onRedo, canUndo, canRedo,
   onTemplates, onTest, onExport, onImport, onCopyLink, onHelp, onClear,
+  onLibrary, libraryOpen, assetCount,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -75,6 +76,16 @@ export default function TopBar({
           <LayoutGrid size={16} />
           <span>Modelos</span>
         </button>
+        <button
+          type="button"
+          className={`ghost-btn hide-mobile ${libraryOpen ? 'is-active' : ''}`}
+          onClick={onLibrary}
+          aria-expanded={libraryOpen}
+        >
+          <FolderOpen size={16} />
+          <span>Mídias</span>
+          {assetCount > 0 && <span className="ghost-count">{assetCount}</span>}
+        </button>
         <div className="menu-wrap" ref={menuRef}>
           <button
             type="button"
@@ -89,6 +100,7 @@ export default function TopBar({
             <div className="dropdown-menu">
               <div className="menu-heading">Fluxo</div>
               {item(<LayoutGrid size={15} />, 'Modelos de fluxo', onTemplates)}
+              {item(<FolderOpen size={15} />, 'Biblioteca de mídias', onLibrary, 'M')}
               {item(<Download size={15} />, 'Exportar JSON', onExport)}
               {item(<Upload size={15} />, 'Importar JSON', onImport)}
               {item(<Link2 size={15} />, 'Copiar link do estúdio', onCopyLink)}

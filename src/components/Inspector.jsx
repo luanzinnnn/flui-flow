@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
-  ArrowRight, AudioLines, ChevronRight, Clock3, Copy, Film, GitBranch,
-  Image as ImageIcon, Link2, Mic, Square, Trash2, Type, Upload, Video, X,
+  ArrowRight, ChevronRight, Clock3, Copy, GitBranch, Image as ImageIcon,
+  Layers, Link2, Mic, Trash2, Type, Video, X,
 } from 'lucide-react'
 import { EDGE_COLORS, NODE_ACCENTS, NODE_TYPES } from '../data/flowData'
-import { useMediaSrc } from '../lib/useMediaSrc'
+import { getBlockKinds, isMessageNode } from '../lib/content'
+import BlockComposer from './BlockComposer'
 
 const NODE_ICON = {
   text: Type,
@@ -51,150 +52,6 @@ function Switch({ checked, onChange, label }) {
   )
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return ''
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function useRecorder(onRecorded, onError) {
-  const [recording, setRecording] = useState(false)
-  const [seconds, setSeconds] = useState(0)
-  const recorderRef = useRef(null)
-  const streamRef = useRef(null)
-  const chunksRef = useRef([])
-  const timerRef = useRef(null)
-  const mountedRef = useRef(true)
-
-  useEffect(() => () => {
-    mountedRef.current = false
-    clearInterval(timerRef.current)
-    try { recorderRef.current?.state === 'recording' && recorderRef.current.stop() } catch { /* noop */ }
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-  }, [])
-
-  const stop = () => {
-    clearInterval(timerRef.current)
-    try {
-      if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop()
-    } catch {
-      setRecording(false)
-    }
-  }
-
-  const start = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      onError?.('Seu navegador não permite gravar áudio aqui. Tente enviar um arquivo.')
-      return
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
-      const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type))
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data) }
-      recorder.onstop = () => {
-        const type = recorder.mimeType || 'audio/webm'
-        const blob = new Blob(chunksRef.current, { type })
-        stream.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        if (mountedRef.current) {
-          setRecording(false)
-          setSeconds(0)
-          onRecorded?.(blob)
-        }
-      }
-      recorder.start()
-      recorderRef.current = recorder
-      setSeconds(0)
-      setRecording(true)
-      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
-    } catch {
-      onError?.('Não consegui acessar o microfone. Verifique a permissão do navegador.')
-    }
-  }
-
-  return { recording, seconds, start, stop }
-}
-
-function RecorderButton({ onRecorded, onError }) {
-  const { recording, seconds, start, stop } = useRecorder(onRecorded, onError)
-  return (
-    <button
-      type="button"
-      className={`record-btn ${recording ? 'is-recording' : ''}`}
-      onClick={recording ? stop : start}
-    >
-      {recording ? <Square size={12} fill="currentColor" /> : <Mic size={14} />}
-      {recording ? `Parar · ${String(Math.floor(seconds / 60)).padStart(1, '0')}:${String(seconds % 60).padStart(2, '0')}` : 'Gravar áudio'}
-      {recording && <span className="recording-dot" />}
-    </button>
-  )
-}
-
-function MediaManager({ node, onPickMedia, onUploadFile, onRemoveMedia, onRecorded, onError }) {
-  const [dragging, setDragging] = useState(false)
-  const src = useMediaSrc(node.mediaId)
-  const fallback = node.media?.src
-  const hasMedia = Boolean(node.mediaId || fallback)
-  const Icon = node.type === 'image' ? ImageIcon : node.type === 'video' ? Film : AudioLines
-  const noun = node.type === 'image' ? 'foto' : node.type === 'video' ? 'vídeo' : 'áudio'
-
-  return (
-    <div className="media-manager">
-      {!hasMedia ? (
-        <div
-          className={`dropzone ${dragging ? 'is-dragging' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragging(false)
-            const file = e.dataTransfer.files?.[0]
-            if (file) onUploadFile(file, node)
-          }}
-        >
-          <span className="dropzone-icon"><Icon size={20} /></span>
-          <strong>Solte uma {noun} aqui</strong>
-          <span>ou escolha um arquivo do seu computador</span>
-          <button type="button" className="small-btn" onClick={() => onPickMedia(node)}>
-            <Upload size={13} /> Escolher arquivo
-          </button>
-        </div>
-      ) : (
-        <div className="media-file">
-          <span className="media-file-icon"><Icon size={16} /></span>
-          <div>
-            <strong>{node.media?.name || `Sua ${noun}`}</strong>
-            <small>{formatBytes(node.media?.size) || (src ? 'pronto para tocar' : 'carregando…')}</small>
-          </div>
-          <span className="file-live" />
-        </div>
-      )}
-
-      {node.type === 'audio' && (
-        <RecorderButton
-          onRecorded={(blob) => onRecorded(blob, node)}
-          onError={onError}
-        />
-      )}
-
-      {hasMedia && (
-        <div className="media-actions">
-          <button type="button" className="small-btn" onClick={() => onPickMedia(node)}>
-            <Upload size={13} /> Trocar
-          </button>
-          <button type="button" className="small-btn danger" onClick={() => onRemoveMedia(node)}>
-            <Trash2 size={13} /> Remover
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function EdgePreview({ edge }) {
   return (
     <div className="edge-preview" style={{ '--edge-color': edge.color }}>
@@ -217,7 +74,8 @@ function EdgePreview({ edge }) {
 export default function Inspector({
   selected, node, edge, sourceNode, targetNode, outEdges, nodes,
   onClose, onPatchNode, onPatchEdge, onDelete, onDuplicate,
-  onPickMedia, onUploadFile, onRemoveMedia, onRecorded,
+  onPatchBlock, onAddTextBlock, onAddAudioBlock, onOpenLibrary,
+  onPickBlockMedia, onRemoveBlock, onMoveBlock, onBlockRecorded,
   onSelectEdge, onError,
 }) {
   const scrollRef = useRef(null)
@@ -310,34 +168,38 @@ export default function Inspector({
   }
 
   if (!node) return null
-  const Icon = NODE_ICON[node.type] || Type
   const isStart = node.type === 'start'
-  const isMedia = ['audio', 'image', 'video'].includes(node.type)
-  const incoming = (selected.type === 'node') ? [] : []
-  const contentLabel = node.type === 'condition' ? 'Detalhe da condição' : isMedia ? 'Legenda' : 'Mensagem'
-  const contentPlaceholder = node.type === 'condition'
-    ? 'Explique o critério deste caminho…'
-    : isMedia
-      ? 'Escreva uma legenda para acompanhar a mídia…'
-      : 'Escreva a mensagem que será enviada…'
+  const isCondition = node.type === 'condition'
+  const isDelay = node.type === 'delay'
+  const message = isMessageNode(node)
+  const blocks = Array.isArray(node.blocks) ? node.blocks : []
+  const kinds = getBlockKinds(node)
+  const Icon = message
+    ? (kinds.length > 1 ? Layers : (NODE_ICON[kinds[0]] || NODE_ICON[node.type] || Type))
+    : (NODE_ICON[node.type] || Type)
+  const eyebrow = message
+    ? (kinds.length > 1 ? 'conteúdo' : (NODE_TYPES[kinds[0] || node.type]?.label || 'balão'))
+    : (NODE_TYPES[node.type]?.label || 'balão')
 
   return (
     <aside className="inspector" key={selectionKey} aria-label="Propriedades do balão">
       <div className="inspector-head">
-        <span className="inspector-eyebrow"><Icon size={12} /> {NODE_TYPES[node.type]?.label || 'balão'}</span>
+        <span className="inspector-eyebrow"><Icon size={12} /> {eyebrow}</span>
         <button type="button" className="panel-close" onClick={onClose} aria-label="Fechar painel"><X size={16} /></button>
       </div>
       <div className="inspector-scroll" ref={scrollRef}>
         <div className="inspector-title-block">
-          <h2>{isStart ? <>O começo de <em>tudo.</em></> : node.type === 'condition' ? <>Um caminho, <em>duas histórias.</em></> : node.type === 'delay' ? <>O tempo certo, <em>sempre.</em></> : <>Dê voz ao <em>seu balão.</em></>}</h2>
+          <h2>
+            {isStart ? <>O começo de <em>tudo.</em></> : isCondition ? <>Um caminho, <em>duas histórias.</em></> : isDelay ? <>O tempo certo, <em>sempre.</em></> : <>Dê vida ao <em>seu balão.</em></>}
+          </h2>
           <p>
             {isStart
               ? 'Todo fluxo parte daqui. Arraste a alça para ligar a primeira mensagem.'
-              : node.type === 'condition'
+              : isCondition
                 ? 'Cada ligação que sai deste balão é uma resposta possível.'
-                : node.type === 'delay'
+                : isDelay
                   ? 'Uma pausa estratégica antes da próxima mensagem.'
-                  : 'Edite o conteúdo, a mídia e a cor deste balão.'}
+                  : 'Combine texto, foto, vídeo e áudio na ordem que fizer sentido.'}
           </p>
         </div>
 
@@ -345,7 +207,7 @@ export default function Inspector({
           <>
             <Section title="Identificação">
               <label className="field-label" htmlFor={`node-title-${node.id}`}>
-                {node.type === 'condition' ? 'Nome da condição' : node.type === 'delay' ? 'Nome da espera' : 'Título do balão'}
+                {isCondition ? 'Nome da condição' : isDelay ? 'Nome da espera' : 'Título do balão'}
               </label>
               <input
                 id={`node-title-${node.id}`}
@@ -357,7 +219,7 @@ export default function Inspector({
               />
             </Section>
 
-            {node.type === 'delay' ? (
+            {isDelay && (
               <Section title="Tempo de espera">
                 <div className="delay-input-row">
                   <input
@@ -380,38 +242,45 @@ export default function Inspector({
                 </div>
                 <p className="field-hint">A prévia mostra a pausa e segue para o próximo balão.</p>
               </Section>
-            ) : (
+            )}
+
+            {isCondition && (
               <Section title="Conteúdo">
-                <label className="field-label" htmlFor={`node-text-${node.id}`}>{contentLabel}</label>
+                <label className="field-label" htmlFor={`node-text-${node.id}`}>Detalhe da condição</label>
                 <textarea
                   id={`node-text-${node.id}`}
                   className="text-area"
-                  value={node.text}
-                  placeholder={contentPlaceholder}
+                  value={node.text || ''}
+                  placeholder="Explique o critério deste caminho…"
                   rows={4}
                   onChange={(e) => onPatchNode({ text: e.target.value }, `node-text:${node.id}`)}
                   maxLength={900}
                 />
                 <div className="field-meta">
                   <span>Use **palavra** para negrito.</span>
-                  <span>{node.text.length}/900</span>
+                  <span>{(node.text || '').length}/900</span>
                 </div>
               </Section>
             )}
 
-            {isMedia && (
-              <Section title={node.type === 'audio' ? 'Áudio' : node.type === 'image' ? 'Foto' : 'Vídeo'}>
-                <MediaManager
+            {message && (
+              <Section
+                title="Conteúdo do balão"
+                aside={<span className="section-count">{blocks.length}</span>}
+              >
+                <BlockComposer
                   node={node}
-                  onPickMedia={onPickMedia}
-                  onUploadFile={onUploadFile}
-                  onRemoveMedia={onRemoveMedia}
-                  onRecorded={onRecorded}
+                  blocks={blocks}
+                  onPatchBlock={onPatchBlock}
+                  onAddTextBlock={onAddTextBlock}
+                  onAddAudioBlock={onAddAudioBlock}
+                  onOpenLibrary={onOpenLibrary}
+                  onPickBlockMedia={onPickBlockMedia}
+                  onRemoveBlock={onRemoveBlock}
+                  onMoveBlock={onMoveBlock}
+                  onRecorded={onBlockRecorded}
                   onError={onError}
                 />
-                <p className="field-hint">
-                  {node.type === 'audio' ? 'Aceita MP3, M4A, WAV, OGG ou uma gravação nova.' : node.type === 'image' ? 'Aceita JPG, PNG, WebP ou GIF.' : 'Aceita MP4, WebM ou MOV.'}
-                </p>
               </Section>
             )}
 

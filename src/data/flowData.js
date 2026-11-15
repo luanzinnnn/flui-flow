@@ -24,11 +24,18 @@ export const NODE_TYPES = {
   start: { label: 'Início', kicker: 'Gatilho', accent: '#a3e635' },
 }
 
+export const BLOCK_META = {
+  text: { label: 'Texto', accent: '#a78bfa' },
+  audio: { label: 'Áudio', accent: '#67e8f9' },
+  image: { label: 'Foto', accent: '#fcd34d' },
+  video: { label: 'Vídeo', accent: '#93c5fd' },
+}
+
 export const ESTIMATED_HEIGHT = {
   text: 188,
-  audio: 286,
-  image: 390,
-  video: 372,
+  audio: 244,
+  image: 336,
+  video: 324,
   condition: 170,
   delay: 142,
   start: 58,
@@ -38,6 +45,9 @@ export const TYPE_ORDER = ['text', 'audio', 'image', 'video', 'condition', 'dela
 
 const asset = (file) => new URL(`media/${file}`, document.baseURI).href
 
+const textBlock = (id, text) => ({ id: `blk-${id}`, kind: 'text', text })
+const mediaBlock = (id, kind, media) => ({ id: `blk-${id}`, kind, media: media ? { ...media } : null, mediaId: null })
+
 const node = (id, type, x, y, props = {}) => ({
   id,
   type,
@@ -46,7 +56,7 @@ const node = (id, type, x, y, props = {}) => ({
   w: type === 'start' ? 156 : 304,
   accent: NODE_TYPES[type].accent,
   title: '',
-  text: '',
+  blocks: [],
   ...props,
 })
 
@@ -66,13 +76,16 @@ const welcomeNodes = [
   node('w-hello', 'text', 224, 402, {
     accent: '#a78bfa',
     title: 'Boas-vindas',
-    text: 'Oi! Que bom te ver por aqui 👋\nEu sou a Ana, da Casa Nômade. Prepara um café e vem comigo.',
+    blocks: [
+      textBlock('w-hello', 'Oi! Que bom te ver por aqui 👋\nEu sou a Ana, da Casa Nômade. Prepara um café e vem comigo.'),
+    ],
   }),
   node('w-audio', 'audio', 584, 340, {
     accent: '#67e8f9',
     title: 'Um recado rápido',
-    text: 'Dá o play, é rapidinho.',
-    media: { src: asset('welcome.m4a'), name: 'recado-da-ana.m4a', type: 'audio/mp4' },
+    blocks: [
+      mediaBlock('w-audio', 'audio', { src: asset('welcome.m4a'), name: 'recado-da-ana.m4a', type: 'audio/mp4' }),
+    ],
   }),
   node('w-condition', 'condition', 944, 414, {
     accent: '#bef264',
@@ -82,13 +95,17 @@ const welcomeNodes = [
   node('w-image', 'image', 1304, 170, {
     accent: '#fcd34d',
     title: 'Blend da Casa',
-    text: 'Torra média, notas de cacau e caramelo. Moído na hora.',
-    media: { src: asset('coffee.webp'), name: 'blend-da-casa.webp', type: 'image/webp' },
+    blocks: [
+      mediaBlock('w-image-media', 'image', { src: asset('coffee.webp'), name: 'blend-da-casa.webp', type: 'image/webp' }),
+      textBlock('w-image-text', 'Torra média, notas de cacau e caramelo. Moído na hora.'),
+    ],
   }),
   node('w-coupon', 'text', 1664, 166, {
     accent: '#a78bfa',
     title: 'Cupom liberado',
-    text: 'Use **BEMVINDA10** no checkout. Válido até domingo à meia-noite.',
+    blocks: [
+      textBlock('w-coupon', 'Use **BEMVINDA10** no checkout. Válido até domingo à meia-noite.'),
+    ],
   }),
   node('w-delay', 'delay', 1304, 620, {
     accent: '#fda4af',
@@ -98,7 +115,9 @@ const welcomeNodes = [
   node('w-last', 'text', 1664, 604, {
     accent: '#93c5fd',
     title: 'Última chance',
-    text: 'Te guardei o cupom por mais 24h. Quando quiser, é só me chamar ☕',
+    blocks: [
+      textBlock('w-last', 'Te guardei o cupom por mais 24h. Quando quiser, é só me chamar ☕'),
+    ],
   }),
 ]
 
@@ -122,13 +141,17 @@ const cartNodes = [
   node('c-text', 'text', 588, 390, {
     accent: '#a78bfa',
     title: 'Carrinho abandonado',
-    text: 'Você deixou o Minimal 01 no carrinho 👀\nEle ainda está reservado no seu nome.',
+    blocks: [
+      textBlock('c-text', 'Você deixou o Minimal 01 no carrinho 👀\nEle ainda está reservado no seu nome.'),
+    ],
   }),
   node('c-video', 'video', 948, 330, {
     accent: '#93c5fd',
     title: 'Um detalhe a mais',
-    text: 'Veja o Minimal 01 em movimento.',
-    media: { src: asset('minimal-promo.webm'), poster: asset('minimal-poster.webp'), name: 'minimal-01-promo.webm', type: 'video/webm' },
+    blocks: [
+      mediaBlock('c-video-media', 'video', { src: asset('minimal-promo.webm'), poster: asset('minimal-poster.webp'), name: 'minimal-01-promo.webm', type: 'video/webm' }),
+      textBlock('c-video-text', 'Veja o Minimal 01 em movimento.'),
+    ],
   }),
   node('c-condition', 'condition', 1308, 420, {
     accent: '#bef264',
@@ -138,12 +161,16 @@ const cartNodes = [
   node('c-yes', 'text', 1668, 240, {
     accent: '#bef264',
     title: 'Cupom aplicado',
-    text: 'Fechou! Use **VOLTEI10** e o Minimal 01 sai por R$ 459,00. A reserva expira em 15 min.',
+    blocks: [
+      textBlock('c-yes', 'Fechou! Use **VOLTEI10** e o Minimal 01 sai por R$ 459,00. A reserva expira em 15 min.'),
+    ],
   }),
   node('c-no', 'text', 1668, 610, {
     accent: '#fda4af',
     title: 'Tudo bem',
-    text: 'Sem pressão. Deixei sua sacola guardada por mais 24h. Se mudar de ideia, é só responder aqui 💛',
+    blocks: [
+      textBlock('c-no', 'Sem pressão. Deixei sua sacola guardada por mais 24h. Se mudar de ideia, é só responder aqui 💛'),
+    ],
   }),
 ]
 
@@ -161,13 +188,16 @@ const leadNodes = [
   node('l-hello', 'text', 228, 388, {
     accent: '#a78bfa',
     title: 'Primeiro contato',
-    text: 'Antes de tudo, prazer! Sou o Léo, do Norte Studio. A gente desenha marcas que vendem.',
+    blocks: [
+      textBlock('l-hello', 'Antes de tudo, prazer! Sou o Léo, do Norte Studio. A gente desenha marcas que vendem.'),
+    ],
   }),
   node('l-audio', 'audio', 588, 336, {
     accent: '#67e8f9',
     title: 'Me conta rapidinho',
-    text: 'Só quero entender seu momento antes de te mostrar qualquer coisa.',
-    media: { src: asset('lead.m4a'), name: 'recado-do-leo.m4a', type: 'audio/mp4' },
+    blocks: [
+      mediaBlock('l-audio', 'audio', { src: asset('lead.m4a'), name: 'recado-do-leo.m4a', type: 'audio/mp4' }),
+    ],
   }),
   node('l-condition', 'condition', 948, 416, {
     accent: '#bef264',
@@ -177,18 +207,24 @@ const leadNodes = [
   node('l-yes', 'text', 1308, 228, {
     accent: '#bef264',
     title: 'Bom sinal',
-    text: 'Show! Então você já tem produto e audiência. O próximo passo é organizar a jornada de compra.',
+    blocks: [
+      textBlock('l-yes', 'Show! Então você já tem produto e audiência. O próximo passo é organizar a jornada de compra.'),
+    ],
   }),
   node('l-image', 'image', 1668, 184, {
     accent: '#fcd34d',
     title: 'Case rápido',
-    text: 'A Casa Nômade reposicionou a marca e triplicou a conversão em 60 dias.',
-    media: { src: asset('coffee.webp'), name: 'case-casa-nomade.webp', type: 'image/webp' },
+    blocks: [
+      mediaBlock('l-image-media', 'image', { src: asset('coffee.webp'), name: 'case-casa-nomade.webp', type: 'image/webp' }),
+      textBlock('l-image-text', 'A Casa Nômade reposicionou a marca e triplicou a conversão em 60 dias.'),
+    ],
   }),
   node('l-no', 'text', 1308, 628, {
     accent: '#fda4af',
     title: 'Tudo começa agora',
-    text: 'Sem estresse. A gente monta seu primeiro funil do zero, no seu ritmo.',
+    blocks: [
+      textBlock('l-no', 'Sem estresse. A gente monta seu primeiro funil do zero, no seu ritmo.'),
+    ],
   }),
 ]
 
@@ -237,16 +273,52 @@ export const TEMPLATES = [
   },
 ]
 
+const SEED_LABELS = {
+  'recado-da-ana.m4a': 'Recado da Ana',
+  'blend-da-casa.webp': 'Blend da Casa',
+  'minimal-01-promo.webm': 'Minimal 01 · vídeo',
+  'recado-do-leo.m4a': 'Recado do Léo',
+}
+
+function buildSeedLibrary() {
+  const map = new Map()
+  let index = 0
+  for (const template of TEMPLATES) {
+    for (const node of template.nodes) {
+      for (const block of node.blocks || []) {
+        if (!['audio', 'image', 'video'].includes(block.kind) || !block.media) continue
+        const key = `src:${block.media.src || block.media.name}`
+        if (map.has(key)) continue
+        index += 1
+        map.set(key, {
+          id: `seed-${index}`,
+          kind: block.kind,
+          label: SEED_LABELS[block.media.name] || block.media.name?.replace(/\.[^.]+$/, '') || `Mídia ${index}`,
+          name: block.media.name,
+          mediaId: block.mediaId || null,
+          media: { ...block.media },
+          createdAt: 0,
+          seed: true,
+        })
+      }
+    }
+  }
+  return Array.from(map.values())
+}
+
+export const SEED_LIBRARY = buildSeedLibrary()
+
 export function createDocFromTemplate(template) {
   const clone = template ? structuredClone(template) : null
   return {
-    version: 1,
+    version: 3,
     templateId: clone?.id || 'blank',
     title: clone?.title || 'Fluxo sem título',
     nodes: clone?.nodes || [
       node('blank-start', 'start', 420, 360),
     ],
     edges: clone?.edges || [],
+    library: structuredClone(SEED_LIBRARY),
   }
 }
 
@@ -259,7 +331,25 @@ export function uid(prefix = 'id') {
 }
 
 export function nodeHeight(node) {
-  return ESTIMATED_HEIGHT[node.type] || 200
+  if (!node) return 200
+  if (node.type === 'start') return 58
+  if (node.type === 'condition') return 174
+  if (node.type === 'delay') return 142
+  let height = 106
+  if (node.title) height += 30
+  const blocks = Array.isArray(node.blocks) ? node.blocks : []
+  if (!blocks.length) height += 44
+  for (const block of blocks) {
+    if (block.kind === 'text') {
+      const lines = Math.max(1, String(block.text || '').split('\n').length)
+      height += 38 + Math.min(lines, 6) * 18
+    } else if (block.kind === 'audio') {
+      height += 70
+    } else {
+      height += 196
+    }
+  }
+  return Math.max(130, Math.min(900, height))
 }
 
 export function formatDuration(seconds) {

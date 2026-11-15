@@ -11,6 +11,7 @@ import EdgeQuickBar from './components/EdgeQuickBar.jsx'
 import TemplatesModal from './components/TemplatesModal.jsx'
 import HelpModal from './components/HelpModal.jsx'
 import PreviewModal from './components/PreviewModal.jsx'
+import MediaShelf from './components/MediaShelf.jsx'
 import Toast from './components/Toast.jsx'
 import {
   createBlankDoc, createDocFromTemplate, EDGE_COLORS, ESTIMATED_HEIGHT,
@@ -20,6 +21,10 @@ import { clamp, getBezier, getFlowBounds, pointInNode } from './lib/geometry.js'
 import { useFlowHistory } from './lib/useFlowHistory.js'
 import { downloadJSON, loadDoc, loadView, saveDoc, saveView } from './lib/storage.js'
 import { putMedia } from './lib/mediaStore.js'
+import {
+  assetToBlock, findEmptyMediaBlock, isMessageNode, makeLibraryAsset, makeMediaBlock,
+  makeTextBlock, mediaKindFromFile, mergeLibraries, normalizeDoc,
+} from './lib/content.js'
 
 const DEFAULT_VIEW = () => {
   const width = window.innerWidth
@@ -59,13 +64,24 @@ function newEdgeColor(source, outCount) {
   return EDGE_COLORS[outCount % EDGE_COLORS.length].value
 }
 
+const MEDIA_NOUN = { audio: 'um áudio', image: 'uma imagem', video: 'um vídeo' }
+
+function validateMediaFile(file, kind) {
+  if (!file) return 'Nenhum arquivo foi selecionado.'
+  if (file.size > 80 * 1024 * 1024) return 'Esse arquivo passa de 80 MB. Escolha um menor para o fluxo continuar leve.'
+  const detected = mediaKindFromFile(file)
+  if (!detected) return 'Formato não reconhecido. Envie uma foto, um vídeo ou um áudio.'
+  if (kind && detected !== kind) return `Esse arquivo é ${MEDIA_NOUN[detected]}, não ${MEDIA_NOUN[kind]}.`
+  return null
+}
+
 function edgeLabelFor(source, outCount) {
   if (source?.type === 'condition') return outCount === 0 ? 'Sim' : 'Não'
   return ''
 }
 
 export default function App() {
-  const initialDoc = useMemo(() => loadDoc() || createDocFromTemplate(TEMPLATES[0]), [])
+  const initialDoc = useMemo(() => normalizeDoc(loadDoc() || createDocFromTemplate(TEMPLATES[0])), [])
   const initialView = useMemo(() => loadView() || DEFAULT_VIEW(), [])
   const { doc, docRef, apply, pushSnapshot, undo, redo, canUndo, canRedo } = useFlowHistory(initialDoc)
 
@@ -75,7 +91,8 @@ export default function App() {
   const sizesRef = useRef({})
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight })
   const [selected, setSelected] = useState(null)
-  const [editingId, setEditingId] = useState(null)
+  const [editingBlock, setEditingBlock] = useState(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [connecting, setConnecting] = useState(null)
   const [panning, setPanning] = useState(false)
   const [draggingId, setDraggingId] = useState(null)
@@ -95,6 +112,7 @@ export default function App() {
   const mountedRef = useRef(true)
 
   const selectedNode = selected?.type === 'node' ? doc.nodes.find((n) => n.id === selected.id) : null
+  const selectedMessageNode = selectedNode && isMessageNode(selectedNode) ? selectedNode : null
   const selectedEdge = selected?.type === 'edge' ? doc.edges.find((e) => e.id === selected.id) : null
   const selectedOutEdges = useMemo(
     () => (selectedNode ? doc.edges.filter((e) => e.from === selectedNode.id) : []),
@@ -294,7 +312,7 @@ export default function App() {
     })
     if (createdEdgeId) {
       setSelected({ type: 'edge', id: createdEdgeId })
-      setEditingId(null)
+      setEditingBlock(null)
       if (existed) notify('Esses balões já estão ligados. Edite a ligação existente.')
     }
     return createdEdgeId
@@ -327,6 +345,9 @@ export default function App() {
       y = spot.y
     }
 
+    const initialBlock = type === 'text'
+      ? makeTextBlock('')
+      : (['audio', 'image', 'video'].includes(type) ? makeMediaBlock(type) : null)
     const newNode = {
       id: uid(type),
       type,
@@ -335,7 +356,7 @@ export default function App() {
       w: width,
       accent: NODE_TYPES[type].accent,
       title: '',
-      text: '',
+      blocks: initialBlock ? [initialBlock] : [],
       ...(type === 'delay' ? { delay: { value: 2, unit: 'horas' } } : {}),
     }
     const color = source ? newEdgeColor(source, current.edges.filter((e) => e.from === source.id).length) : null
@@ -350,13 +371,8 @@ export default function App() {
       edges: newEdge ? [...prev.edges, newEdge] : prev.edges,
     }))
     setSelected({ type: 'node', id: newNode.id })
-    if (type === 'text') setEditingId(newNode.id)
-    else setEditingId(null)
+    setEditingBlock(initialBlock?.kind === 'text' ? { nodeId: newNode.id, blockId: initialBlock.id } : null)
     requestAnimationFrame(() => ensureVisible(newNode))
-    if (source) {
-      // Keep the new connection visible, but let the new node own the panel.
-      setSelected({ type: 'node', id: newNode.id })
-    }
   }, [selected, apply, docRef, screenToWorld, ensureVisible])
 
   const createNodeAtDrop = useCallback((worldX, worldY, fromId) => {
@@ -364,6 +380,7 @@ export default function App() {
     const from = currentNode.nodes.find((n) => n.id === fromId)
     if (!from) return
     const height = ESTIMATED_HEIGHT.text
+    const block = makeTextBlock('')
     const newNode = {
       id: uid('text'),
       type: 'text',
@@ -372,7 +389,7 @@ export default function App() {
       w: 304,
       accent: NODE_TYPES.text.accent,
       title: '',
-      text: '',
+      blocks: [block],
     }
     const outCount = currentNode.edges.filter((e) => e.from === fromId).length
     const newEdge = {
@@ -390,7 +407,7 @@ export default function App() {
       edges: [...prev.edges, newEdge],
     }))
     setSelected({ type: 'node', id: newNode.id })
-    setEditingId(newNode.id)
+    setEditingBlock({ nodeId: newNode.id, blockId: block.id })
   }, [apply, docRef])
 
   const removeSelection = useCallback(() => {
@@ -408,7 +425,7 @@ export default function App() {
         edges: prev.edges.filter((e) => e.from !== node.id && e.to !== node.id),
       }))
       setSelected(null)
-      setEditingId(null)
+      setEditingBlock(null)
       notify('Balão excluído.', { actionLabel: 'Desfazer', onAction: undo })
     } else if (selected.type === 'edge') {
       apply((prev) => ({ ...prev, edges: prev.edges.filter((e) => e.id !== selected.id) }))
@@ -425,10 +442,11 @@ export default function App() {
       x: selectedNode.x + 38,
       y: selectedNode.y + 46,
       title: selectedNode.title ? `${selectedNode.title} · cópia` : '',
+      blocks: (selectedNode.blocks || []).map((block) => ({ ...block, id: uid('blk') })),
     }
     apply((prev) => ({ ...prev, nodes: [...prev.nodes, clone] }))
     setSelected({ type: 'node', id: clone.id })
-    setEditingId(null)
+    setEditingBlock(null)
     requestAnimationFrame(() => ensureVisible(clone))
     notify('Balão duplicado.')
   }, [selectedNode, apply, notify, ensureVisible])
@@ -487,7 +505,7 @@ export default function App() {
       return
     }
     setSelected(null)
-    setEditingId(null)
+    setEditingBlock(null)
     beginPan(e)
   }, [modal, spaceHeld, beginPan])
 
@@ -496,6 +514,7 @@ export default function App() {
     if (e.target.closest('.node, .edge-label, .minimap, .toolrail, .edge-quickbar, .zoom-dock')) return
     const point = screenToWorld(e.clientX, e.clientY)
     const height = ESTIMATED_HEIGHT.text
+    const block = makeTextBlock('')
     const newNode = {
       id: uid('text'),
       type: 'text',
@@ -504,15 +523,19 @@ export default function App() {
       w: 304,
       accent: NODE_TYPES.text.accent,
       title: '',
-      text: '',
+      blocks: [block],
     }
     apply((prev) => ({ ...prev, nodes: [...prev.nodes, newNode] }))
     setSelected({ type: 'node', id: newNode.id })
-    setEditingId(newNode.id)
+    setEditingBlock({ nodeId: newNode.id, blockId: block.id })
   }, [modal, screenToWorld, apply])
 
   const handleNodePointerDown = useCallback((e, node) => {
-    if (e.target.closest('[data-no-drag]')) return
+    if (e.target.closest('[data-no-drag]')) {
+      setSelected({ type: 'node', id: node.id })
+      if (editingBlock && editingBlock.nodeId !== node.id) setEditingBlock(null)
+      return
+    }
     if (spaceHeld || e.button === 1) {
       e.stopPropagation()
       beginPan(e)
@@ -521,8 +544,8 @@ export default function App() {
     if (e.button !== 0) return
     e.stopPropagation()
     setSelected({ type: 'node', id: node.id })
-    if (editingId && editingId !== node.id) setEditingId(null)
-    if (editingId === node.id && e.target.closest('textarea')) return
+    if (editingBlock && editingBlock.nodeId !== node.id) setEditingBlock(null)
+    if (editingBlock?.nodeId === node.id && e.target.closest('textarea')) return
 
     const startX = e.clientX
     const startY = e.clientY
@@ -538,7 +561,7 @@ export default function App() {
       if (!moved && Math.hypot(dx, dy) < 3) return
       if (!moved) {
         moved = true
-        setEditingId(null)
+        setEditingBlock(null)
         setDraggingId(node.id)
         if (!snapshotted) {
           pushSnapshot()
@@ -561,7 +584,7 @@ export default function App() {
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', end)
-  }, [spaceHeld, editingId, beginPan, pushSnapshot, apply])
+  }, [spaceHeld, editingBlock, beginPan, pushSnapshot, apply])
 
   const startConnect = useCallback((e, node) => {
     if (e.button !== 0) return
@@ -569,7 +592,7 @@ export default function App() {
     e.stopPropagation()
     if (modal) return
     setSelected({ type: 'node', id: node.id })
-    setEditingId(null)
+    setEditingBlock(null)
     const nodeSize = sizesRef.current[node.id]
     const sourceBox = {
       x: node.x,
@@ -638,85 +661,200 @@ export default function App() {
     connectCleanupRef.current?.()
   }, [])
 
-  const pickMedia = useCallback((node) => {
-    if (!node) return
-    const kind = node.type
-    if (!['audio', 'image', 'video'].includes(kind)) return
-    pickerRef.current = { nodeId: node.id, kind }
+  const storeAssetFromFile = useCallback(async (file, kind) => {
+    const { id } = await putMedia(file, { name: file.name, type: file.type, size: file.size })
+    return makeLibraryAsset({
+      kind,
+      mediaId: id,
+      media: { name: file.name, type: file.type, size: file.size },
+      label: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+    })
+  }, [])
+
+  const openBlockPicker = useCallback((node, block) => {
+    if (!node || !block || !['audio', 'image', 'video'].includes(block.kind)) return
+    pickerRef.current = { mode: 'block', nodeId: node.id, blockId: block.id, kind: block.kind }
     const input = fileInputRef.current
     if (!input) return
-    input.accept = kind === 'audio' ? 'audio/*' : kind === 'video' ? 'video/*' : 'image/*'
+    input.multiple = false
+    input.accept = `${block.kind}/*`
     input.value = ''
     input.click()
   }, [])
 
-  const uploadFileToNode = useCallback(async (file, nodeOrId, kindOverride) => {
-    if (!file) return
-    const nodeId = typeof nodeOrId === 'string' ? nodeOrId : nodeOrId?.id
-    const node = docRef.current.nodes.find((n) => n.id === nodeId)
-    if (!node) return
-    const kind = kindOverride || node.type
-    if (node.type === 'start') return
-    if (file.size > 80 * 1024 * 1024) {
-      notify('Esse arquivo passa de 80 MB. Escolha um menor para o fluxo continuar leve.', { tone: 'error' })
-      return
-    }
-    const expected = kind === 'image' ? 'image/' : kind === 'video' ? 'video/' : 'audio/'
-    if (file.type && !file.type.startsWith(expected)) {
-      notify(`Esse arquivo não parece ser ${kind === 'image' ? 'uma imagem' : kind === 'video' ? 'um vídeo' : 'um áudio'}.`, { tone: 'error' })
-      return
-    }
-    notify('Preparando a mídia…', { tone: 'info', duration: 1800 })
-    try {
-      const { id } = await putMedia(file, { name: file.name, type: file.type, size: file.size })
-      apply((prev) => ({
+  const openLibraryPicker = useCallback(() => {
+    pickerRef.current = { mode: 'library' }
+    const input = fileInputRef.current
+    if (!input) return
+    input.multiple = true
+    input.accept = 'image/*,video/*,audio/*'
+    input.value = ''
+    input.click()
+  }, [])
+
+  const attachAssetToBlock = useCallback((nodeId, blockId, asset) => {
+    apply((prev) => {
+      const node = prev.nodes.find((n) => n.id === nodeId)
+      if (!node) return prev
+      return {
         ...prev,
+        library: mergeLibraries([asset], prev.library),
         nodes: prev.nodes.map((n) => (n.id === nodeId
-          ? { ...n, mediaId: id, media: { name: file.name, type: file.type, size: file.size } }
+          ? {
+            ...n,
+            blocks: (n.blocks || []).map((b) => (b.id === blockId
+              ? { ...b, mediaId: asset.mediaId || null, media: asset.media ? { ...asset.media } : null }
+              : b)),
+          }
           : n)),
-      }))
+      }
+    })
+    setSelected({ type: 'node', id: nodeId })
+  }, [apply])
+
+  const saveFileToBlock = useCallback(async (file, nodeId, blockId, kind) => {
+    const error = validateMediaFile(file, kind)
+    if (error) {
+      notify(error, { tone: 'error' })
+      return false
+    }
+    notify('Salvando mídia…', { tone: 'info', duration: 1600 })
+    try {
+      const asset = await storeAssetFromFile(file, kind)
+      attachAssetToBlock(nodeId, blockId, asset)
       notify('Mídia adicionada ao balão.')
+      return true
     } catch {
       notify('Não consegui guardar essa mídia. Tente um arquivo menor.', { tone: 'error' })
+      return false
     }
-  }, [apply, docRef, notify])
+  }, [attachAssetToBlock, notify, storeAssetFromFile])
 
-  const handleRecorded = useCallback(async (blob, node) => {
-    if (!blob || !node) return
+  const addFilesToLibrary = useCallback(async (files) => {
+    const candidates = []
+    let firstError = null
+    for (const file of files) {
+      const kind = mediaKindFromFile(file)
+      const error = validateMediaFile(file, kind)
+      if (error) {
+        if (!firstError) firstError = error
+        continue
+      }
+      candidates.push({ file, kind })
+    }
+    if (!candidates.length) {
+      notify(firstError || 'Nenhum arquivo de mídia válido foi selecionado.', { tone: 'error' })
+      return
+    }
+    notify(candidates.length > 1 ? `Salvando ${candidates.length} mídias…` : 'Salvando mídia…', { tone: 'info', duration: 1800 })
+    const added = []
+    for (const { file, kind } of candidates) {
+      try {
+        added.push(await storeAssetFromFile(file, kind))
+      } catch {
+        // keep going with the remaining files
+      }
+    }
+    if (!added.length) {
+      notify('Não consegui guardar as mídias. Tente arquivos menores.', { tone: 'error' })
+      return
+    }
+    apply((prev) => ({ ...prev, library: mergeLibraries(added, prev.library) }))
+    setLibraryOpen(true)
+    notify(
+      added.length === 1
+        ? 'Mídia na biblioteca. Arraste para um balão ou clique para inserir.'
+        : `${added.length} mídias na biblioteca. Arraste para um balão ou clique para inserir.`,
+    )
+  }, [apply, notify, storeAssetFromFile])
+
+  const handleBlockRecorded = useCallback(async (blob, node, block) => {
+    if (!blob || !node || !block) return
     const ext = blob.type.includes('mp4') ? 'm4a' : 'webm'
     const file = new File([blob], `gravacao-${Date.now()}.${ext}`, { type: blob.type || 'audio/webm' })
-    notify('Salvando sua gravação…', { tone: 'info', duration: 1600 })
-    try {
-      const { id } = await putMedia(file, { name: file.name, type: file.type, size: file.size })
-      apply((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) => (n.id === node.id
-          ? { ...n, mediaId: id, media: { name: file.name, type: file.type, size: file.size } }
-          : n)),
-      }))
-      notify('Áudio gravado e adicionado.')
-    } catch {
-      notify('Não consegui salvar a gravação.', { tone: 'error' })
-    }
-  }, [apply, notify])
+    await saveFileToBlock(file, node.id, block.id, 'audio')
+  }, [saveFileToBlock])
 
-  const removeMedia = useCallback((node) => {
-    if (!node) return
+  const addAssetToNode = useCallback((nodeId, asset) => {
+    const node = docRef.current.nodes.find((n) => n.id === nodeId)
+    if (!node || !isMessageNode(node)) {
+      notify('Escolha um balão de mensagem para receber essa mídia.', { tone: 'info' })
+      return false
+    }
+    const currentBlocks = node.blocks || []
+    const empty = findEmptyMediaBlock(currentBlocks, asset.kind)
+    const newBlock = assetToBlock(asset)
+    const nextBlock = empty ? { ...newBlock, id: empty.id } : newBlock
     apply((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((n) => (n.id === node.id ? { ...n, mediaId: null, media: null } : n)),
+      library: mergeLibraries(prev.library, [asset]),
+      nodes: prev.nodes.map((n) => {
+        if (n.id !== nodeId) return n
+        const blocks = n.blocks || []
+        return {
+          ...n,
+          blocks: empty ? blocks.map((b) => (b.id === empty.id ? nextBlock : b)) : [...blocks, nextBlock],
+        }
+      }),
     }))
-    notify('Mídia removida.', { actionLabel: 'Desfazer', onAction: undo })
-  }, [apply, notify, undo])
+    setSelected({ type: 'node', id: nodeId })
+    notify('Mídia adicionada ao balão.')
+    return true
+  }, [apply, docRef, notify])
+
+  const createNodeFromAsset = useCallback((asset) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const center = screenToWorld(rect.left + rect.width * 0.44, rect.top + rect.height * 0.52)
+    const spot = freeSpot(center.x - 152, center.y - 170, docRef.current.nodes)
+    const node = {
+      id: uid(asset.kind),
+      type: asset.kind,
+      x: Math.round(spot.x),
+      y: Math.round(spot.y),
+      w: 304,
+      accent: NODE_TYPES[asset.kind].accent,
+      title: '',
+      blocks: [assetToBlock(asset)],
+    }
+    apply((prev) => ({ ...prev, nodes: [...prev.nodes, node] }))
+    setSelected({ type: 'node', id: node.id })
+    setEditingBlock(null)
+    requestAnimationFrame(() => ensureVisible(node))
+    notify('Novo balão criado com a mídia.')
+  }, [apply, docRef, ensureVisible, notify, screenToWorld])
+
+  const handleLibraryInsert = useCallback((asset) => {
+    if (!asset) return
+    if (selectedMessageNode) {
+      addAssetToNode(selectedMessageNode.id, asset)
+    } else {
+      createNodeFromAsset(asset)
+    }
+    if (window.innerWidth <= 900) setLibraryOpen(false)
+  }, [selectedMessageNode, addAssetToNode, createNodeFromAsset])
+
+  const handleDropAsset = useCallback((nodeId, assetId) => {
+    const asset = (docRef.current.library || []).find((item) => item.id === assetId)
+    if (asset) addAssetToNode(nodeId, asset)
+  }, [addAssetToNode, docRef])
+
+  const openLibrary = useCallback(() => setLibraryOpen(true), [])
+  const closeLibrary = useCallback(() => setLibraryOpen(false), [])
+  const toggleLibrary = useCallback(() => setLibraryOpen((open) => !open), [])
 
   const handleFilePicked = useCallback((e) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files || [])
     e.target.value = ''
     const picker = pickerRef.current
     pickerRef.current = null
-    if (!file || !picker) return
-    uploadFileToNode(file, picker.nodeId, picker.kind)
-  }, [uploadFileToNode])
+    if (!files.length || !picker) return
+    if (picker.mode === 'library') {
+      addFilesToLibrary(files)
+    } else if (picker.mode === 'block') {
+      saveFileToBlock(files[0], picker.nodeId, picker.blockId, picker.kind)
+    }
+  }, [addFilesToLibrary, saveFileToBlock])
 
   const handleImportFile = useCallback((e) => {
     const file = e.target.files?.[0]
@@ -735,7 +873,7 @@ export default function App() {
             w: n.type === 'start' ? 156 : (Number(n.w) || 304),
             accent: n.accent || NODE_TYPES[n.type].accent,
             title: String(n.title || ''),
-            text: String(n.text || ''),
+            ...(n.type === 'condition' ? { text: String(n.text || '') } : {}),
           }))
         if (!nodes.length) throw new Error('nenhum nó válido')
         const ids = new Set(nodes.map((n) => n.id))
@@ -749,16 +887,19 @@ export default function App() {
             animated: edge.animated !== false,
             dashed: Boolean(edge.dashed),
           }))
-        const imported = {
-          version: 1,
+        const imported = normalizeDoc({
+          version: 3,
           templateId: parsed.templateId || 'imported',
           title: String(parsed.title || file.name.replace(/\.json$/i, '') || 'Fluxo importado'),
           nodes,
           edges,
-        }
+          library: Array.isArray(parsed.library) ? parsed.library : [],
+        })
+        imported.library = mergeLibraries(docRef.current.library, imported.library)
         apply(() => imported)
         setSelected(null)
-        setEditingId(null)
+        setEditingBlock(null)
+        setLibraryOpen(false)
         setFitting(true)
         notify('Fluxo importado. Bem-vindo de volta!')
       } catch {
@@ -766,7 +907,7 @@ export default function App() {
       }
     }
     reader.readAsText(file)
-  }, [apply, notify])
+  }, [apply, docRef, notify])
 
   const handleExport = useCallback(() => {
     const payload = { ...docRef.current, exportedAt: new Date().toISOString(), app: 'flui' }
@@ -775,14 +916,16 @@ export default function App() {
   }, [docRef, notify])
 
   const applyTemplate = useCallback((template) => {
-    const next = createDocFromTemplate(template)
+    const next = normalizeDoc(createDocFromTemplate(template))
+    next.library = mergeLibraries(docRef.current.library, next.library)
     apply(() => next)
     setSelected(null)
-    setEditingId(null)
+    setEditingBlock(null)
     setModal(null)
+    setLibraryOpen(false)
     setFitting(true)
     notify(template ? `Modelo “${template.short}” aplicado.` : 'Um novo fluxo, em branco.')
-  }, [apply, notify])
+  }, [apply, docRef, notify])
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -794,29 +937,97 @@ export default function App() {
   }, [notify])
 
   const handleClear = useCallback(() => {
-    apply(() => createBlankDoc())
+    const next = normalizeDoc(createBlankDoc())
+    next.library = mergeLibraries(docRef.current.library, next.library)
+    apply(() => next)
     setSelected(null)
-    setEditingId(null)
+    setEditingBlock(null)
+    setLibraryOpen(false)
     setFitting(true)
     notify('Tela limpa. Agora é sua.', { actionLabel: 'Desfazer', onAction: undo })
-  }, [apply, notify, undo])
+  }, [apply, docRef, notify, undo])
 
   const handleTitleChange = useCallback((value) => {
     apply((prev) => ({ ...prev, title: value }), { key: 'doc-title' })
   }, [apply])
 
-  const handleNodeDoubleClick = useCallback((node) => {
-    setSelected({ type: 'node', id: node.id })
-    if (node.type === 'text') setEditingId(node.id)
-  }, [])
-
-  const handleNodeTextChange = useCallback((value) => {
-    if (!editingId) return
+  const patchBlock = useCallback((nodeId, blockId, patch, key) => {
     apply((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((n) => (n.id === editingId ? { ...n, text: value } : n)),
-    }), { key: `node-text:${editingId}` })
-  }, [editingId, apply])
+      nodes: prev.nodes.map((n) => (n.id === nodeId
+        ? { ...n, blocks: (n.blocks || []).map((b) => (b.id === blockId ? { ...b, ...patch } : b)) }
+        : n)),
+    }), { key })
+  }, [apply])
+
+  const addTextBlock = useCallback((nodeId) => {
+    const block = makeTextBlock('')
+    apply((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, blocks: [...(n.blocks || []), block] } : n)),
+    }))
+    setSelected({ type: 'node', id: nodeId })
+  }, [apply])
+
+  const addAudioBlock = useCallback((nodeId) => {
+    const block = makeMediaBlock('audio')
+    apply((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, blocks: [...(n.blocks || []), block] } : n)),
+    }))
+    setSelected({ type: 'node', id: nodeId })
+    notify('Bloco de áudio adicionado. Envie um arquivo ou grave agora.', { tone: 'info', duration: 3000 })
+  }, [apply, notify])
+
+  const removeBlock = useCallback((nodeId, blockId) => {
+    apply((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId
+        ? { ...n, blocks: (n.blocks || []).filter((b) => b.id !== blockId) }
+        : n)),
+    }))
+    if (editingBlock?.blockId === blockId) setEditingBlock(null)
+    notify('Bloco removido.', { actionLabel: 'Desfazer', onAction: undo })
+  }, [apply, editingBlock, notify, undo])
+
+  const moveBlock = useCallback((nodeId, blockId, direction) => {
+    apply((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => {
+        if (n.id !== nodeId) return n
+        const blocks = [...(n.blocks || [])]
+        const index = blocks.findIndex((b) => b.id === blockId)
+        const nextIndex = index + direction
+        if (index < 0 || nextIndex < 0 || nextIndex >= blocks.length) return n
+        const [block] = blocks.splice(index, 1)
+        blocks.splice(nextIndex, 0, block)
+        return { ...n, blocks }
+      }),
+    }))
+  }, [apply])
+
+  const startEditingBlock = useCallback((node, block) => {
+    if (!block || block.kind !== 'text') return
+    setSelected({ type: 'node', id: node.id })
+    setEditingBlock({ nodeId: node.id, blockId: block.id })
+  }, [])
+
+  const endEditingBlock = useCallback(() => setEditingBlock(null), [])
+
+  const handleBlockTextChange = useCallback((node, block, value) => {
+    patchBlock(node.id, block.id, { text: value }, `block-text:${block.id}`)
+  }, [patchBlock])
+
+  const handleNodeDoubleClick = useCallback((node) => {
+    setSelected({ type: 'node', id: node.id })
+    const blocks = node.blocks || []
+    const textBlocks = blocks.filter((b) => b.kind === 'text')
+    if (isMessageNode(node) && blocks.length === 1 && textBlocks.length === 1) {
+      setEditingBlock({ nodeId: node.id, blockId: textBlocks[0].id })
+    } else {
+      setEditingBlock(null)
+    }
+  }, [])
 
   const centerOnWorld = useCallback((x, y) => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -837,16 +1048,21 @@ export default function App() {
       : doc.edges.some((e) => e.id === selected.id)
     if (!exists) {
       setSelected(null)
-      setEditingId(null)
+      setEditingBlock(null)
     }
   }, [doc, selected])
 
   useEffect(() => {
-    if (editingId && !doc.nodes.some((n) => n.id === editingId)) setEditingId(null)
-  }, [doc.nodes, editingId])
+    if (!editingBlock) return
+    const node = doc.nodes.find((n) => n.id === editingBlock.nodeId)
+    const exists = node && (node.blocks || []).some((b) => b.id === editingBlock.blockId)
+    if (!exists) setEditingBlock(null)
+  }, [doc.nodes, editingBlock])
 
   useEffect(() => {
     if (!modal) return undefined
+    setEditingBlock(null)
+    setLibraryOpen(false)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previous }
@@ -935,12 +1151,16 @@ export default function App() {
       const typing = isTextInput(e.target)
       if (e.key === 'Escape') {
         if (modal) return
+        if (libraryOpen) {
+          setLibraryOpen(false)
+          return
+        }
         if (connecting) {
           cancelConnecting()
           return
         }
-        if (editingId) {
-          setEditingId(null)
+        if (editingBlock) {
+          setEditingBlock(null)
           return
         }
         if (selected) setSelected(null)
@@ -955,6 +1175,11 @@ export default function App() {
       if (typing) return
 
       const meta = e.metaKey || e.ctrlKey
+      if (!meta && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        setLibraryOpen((open) => !open)
+        return
+      }
       if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -1014,7 +1239,7 @@ export default function App() {
       window.removeEventListener('blur', onBlur)
     }
   }, [
-    modal, connecting, editingId, selected, cancelConnecting, redo, undo,
+    modal, connecting, editingBlock, selected, cancelConnecting, redo, undo, libraryOpen,
     duplicateSelection, handleExport, removeSelection, zoomCenter, fitView, setZoom100,
   ])
 
@@ -1046,7 +1271,7 @@ export default function App() {
   const hasNodes = doc.nodes.length > 0
 
   return (
-    <div className={`app ${modal ? 'has-modal' : ''}`}>
+    <div className={`app ${modal ? 'has-modal' : ''} ${libraryOpen ? 'has-library' : ''}`}>
       <div className="canvas-atmosphere" aria-hidden="true">
         <span className="atmo atmo-a" />
         <span className="atmo atmo-b" />
@@ -1078,7 +1303,7 @@ export default function App() {
             sizes={sizes}
             selectedEdgeId={selected?.type === 'edge' ? selected.id : null}
             connecting={connecting}
-            onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingId(null) }}
+            onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingBlock(null) }}
           />
           {doc.nodes.map((node) => (
             <NodeCard
@@ -1087,16 +1312,18 @@ export default function App() {
               selected={selected?.type === 'node' && selected.id === node.id}
               isTarget={nodeTargetId === node.id}
               connecting={Boolean(connecting)}
-              editing={editingId === node.id}
+              editingBlockId={editingBlock?.nodeId === node.id ? editingBlock.blockId : null}
               outEdges={outEdgesByNode[node.id] || []}
               onMeasure={handleMeasure}
               onPointerDown={handleNodePointerDown}
               onStartConnect={startConnect}
-              onOpen={(n) => { setSelected({ type: 'node', id: n.id }); setEditingId(null) }}
+              onOpen={(n) => { setSelected({ type: 'node', id: n.id }); setEditingBlock(null) }}
               onDoubleClick={handleNodeDoubleClick}
-              onTextChange={handleNodeTextChange}
-              onEndEdit={() => setEditingId(null)}
-              onPickMedia={pickMedia}
+              onStartEditBlock={startEditingBlock}
+              onBlockTextChange={handleBlockTextChange}
+              onEndEditBlock={endEditingBlock}
+              onPickBlockMedia={openBlockPicker}
+              onDropAsset={handleDropAsset}
             />
           ))}
         </div>
@@ -1124,11 +1351,30 @@ export default function App() {
         onCopyLink={handleCopyLink}
         onHelp={() => setModal('help')}
         onClear={handleClear}
+        onLibrary={toggleLibrary}
+        libraryOpen={libraryOpen}
+        assetCount={(doc.library || []).length}
       />
 
       <div className="mobile-hint" aria-hidden="true">arraste para explorar · pinça para zoom</div>
 
-      <ToolRail onAdd={addNode} onDeselect={() => { setSelected(null); setEditingId(null) }} />
+      <ToolRail
+        onAdd={addNode}
+        onDeselect={() => { setSelected(null); setEditingBlock(null); setLibraryOpen(false) }}
+        onToggleLibrary={toggleLibrary}
+        libraryOpen={libraryOpen}
+        assetCount={(doc.library || []).length}
+      />
+
+      <MediaShelf
+        open={libraryOpen}
+        assets={doc.library || []}
+        selectedNode={selectedMessageNode}
+        onClose={closeLibrary}
+        onUpload={openLibraryPicker}
+        onUploadFiles={addFilesToLibrary}
+        onInsert={handleLibraryInsert}
+      />
 
       <div className="canvas-hints hide-mobile">
         <span><MousePointer2 size={12} /> arraste para mover</span>
@@ -1165,16 +1411,20 @@ export default function App() {
         targetNode={edgeTarget}
         outEdges={selectedOutEdges}
         nodes={doc.nodes}
-        onClose={() => { setSelected(null); setEditingId(null) }}
+        onClose={() => { setSelected(null); setEditingBlock(null) }}
         onPatchNode={patchSelectedNode}
         onPatchEdge={patchSelectedEdge}
         onDelete={removeSelection}
         onDuplicate={duplicateSelection}
-        onPickMedia={pickMedia}
-        onUploadFile={uploadFileToNode}
-        onRemoveMedia={removeMedia}
-        onRecorded={handleRecorded}
-        onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingId(null) }}
+        onPatchBlock={patchBlock}
+        onAddTextBlock={addTextBlock}
+        onAddAudioBlock={addAudioBlock}
+        onOpenLibrary={openLibrary}
+        onPickBlockMedia={openBlockPicker}
+        onRemoveBlock={removeBlock}
+        onMoveBlock={moveBlock}
+        onBlockRecorded={handleBlockRecorded}
+        onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingBlock(null) }}
         onError={(message) => notify(message, { tone: 'error' })}
       />
 

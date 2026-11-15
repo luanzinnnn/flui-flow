@@ -1,55 +1,75 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpRight, AudioLines, Clock3, Film, GitBranch, Image as ImageIcon,
-  RotateCcw, Sparkles, X,
+  Layers, RotateCcw, Sparkles, X,
 } from 'lucide-react'
 import { useMediaSrc } from '../lib/useMediaSrc'
+import { MEDIA_KINDS, blockHasMedia, getBlockKinds } from '../lib/content'
 import AudioPlayer from './AudioPlayer'
 import RichText from './RichText'
 
-function ChatMedia({ node }) {
-  const resolved = useMediaSrc(node.mediaId)
-  const src = resolved || node.media?.src
+function ChatMediaBlock({ block, accent }) {
+  const resolved = useMediaSrc(block.mediaId)
+  const src = resolved || block.media?.src
   if (!src) return null
 
-  if (node.type === 'image') {
+  if (block.kind === 'image') {
     return (
       <div className="chat-media chat-image">
-        <img src={src} alt={node.title || 'Imagem enviada'} />
+        <img src={src} alt={block.media?.name || 'Imagem enviada'} />
         <span><ImageIcon size={11} /> imagem</span>
       </div>
     )
   }
-  if (node.type === 'video') {
+  if (block.kind === 'video') {
     return (
       <div className="chat-media chat-video">
-        <video src={src} poster={node.media?.poster} controls playsInline preload="metadata" />
+        <video src={src} poster={block.media?.poster} controls playsInline preload="metadata" />
         <span><Film size={11} /> vídeo</span>
       </div>
     )
   }
-  if (node.type === 'audio') {
+  if (block.kind === 'audio') {
     return (
       <div className="chat-audio">
-        <AudioPlayer src={src} accent={node.accent || '#67e8f9'} compact />
+        <AudioPlayer src={src} accent={accent || '#67e8f9'} compact />
       </div>
     )
   }
   return null
 }
 
-function TypePill({ type }) {
+function ChatBlocks({ node }) {
+  const blocks = node.blocks || []
+  return (
+    <div className="chat-blocks">
+      {blocks.map((block) => {
+        if (block.kind === 'text') {
+          if (!String(block.text || '').trim()) return null
+          return <p key={block.id}><RichText text={block.text} /></p>
+        }
+        if (!blockHasMedia(block)) return null
+        return <ChatMediaBlock key={block.id} block={block} accent={node.accent} />
+      })}
+    </div>
+  )
+}
+
+function TypePill({ type, kinds }) {
   const map = {
     condition: [GitBranch, 'condição'],
     delay: [Clock3, 'espera'],
     audio: [AudioLines, 'áudio'],
     image: [ImageIcon, 'foto'],
     video: [Film, 'vídeo'],
+    text: null,
+    content: [Layers, 'conteúdo'],
   }
-  const item = map[type]
+  const key = kinds && kinds.length > 1 ? 'content' : (kinds?.[0] || type)
+  const item = map[key]
   if (!item) return null
   const Icon = item[0]
-  return <span className={`chat-type-pill type-${type}`}><Icon size={10} /> {item[1]}</span>
+  return <span className={`chat-type-pill type-${key}`}><Icon size={10} /> {item[1]}</span>
 }
 
 export default function PreviewModal({ nodes, edges, docTitle, onClose }) {
@@ -172,13 +192,17 @@ export default function PreviewModal({ nodes, edges, docTitle, onClose }) {
     schedule(() => enterNode(target), edge.label.trim() ? 760 : 420)
   }
 
+  const totalMedia = nodes.reduce(
+    (total, node) => total + (node.blocks || []).filter((b) => MEDIA_KINDS.has(b.kind) && blockHasMedia(b)).length,
+    0,
+  )
   const stats = [
     { value: nodes.length, label: 'balões' },
     { value: edges.length, label: 'ligações' },
-    { value: nodes.filter((n) => n.media).length, label: 'mídias' },
+    { value: totalMedia, label: 'mídias' },
   ]
 
-  const mediaCount = stats[2].value
+  const mediaCount = totalMedia
 
   return (
     <div className="preview-overlay">
@@ -274,13 +298,16 @@ export default function PreviewModal({ nodes, edges, docTitle, onClose }) {
                         </div>
                       ) : (
                         <div className="chat-bubble bot-bubble" style={{ '--bubble-color': node.accent }}>
-                          {node.type === 'condition' && (
-                            <div className="chat-condition-title"><GitBranch size={12} /> {node.title || 'Escolha um caminho'}</div>
+                          {node.type === 'condition' ? (
+                            <>
+                              <div className="chat-condition-title"><GitBranch size={12} /> {node.title || 'Escolha um caminho'}</div>
+                              {node.text && <p><RichText text={node.text} /></p>}
+                            </>
+                          ) : (
+                            <ChatBlocks node={node} />
                           )}
-                          <ChatMedia node={node} />
-                          {node.text && <p><RichText text={node.text} /></p>}
                           <div className="chat-bubble-meta">
-                            <TypePill type={node.type} />
+                            <TypePill type={node.type} kinds={getBlockKinds(node)} />
                             <span>agora ✓✓</span>
                           </div>
                         </div>

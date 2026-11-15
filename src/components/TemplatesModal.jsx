@@ -104,8 +104,8 @@ export default function TemplatesModal({ onClose, onApply, onBlank, currentTempl
 
         <div className="template-grid">
           {TEMPLATES.map((template) => {
-            const media = template.nodes.filter((n) => n.media)
-            const kinds = new Set(media.map((n) => n.type))
+            const media = template.nodes.flatMap((n) => (n.blocks || []).filter((b) => ['audio', 'image', 'video'].includes(b.kind)))
+            const kinds = new Set(media.map((b) => b.kind))
             return (
               <button
                 type="button"

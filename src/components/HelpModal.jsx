@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { ArrowRight, Command, Keyboard, MousePointer2, Sparkles, X } from 'lucide-react'
+import { ArrowRight, Command, FolderOpen, Keyboard, Layers, MousePointer2, Sparkles, X } from 'lucide-react'
 
 const SHORTCUTS = [
   ['Arrastar a tela', ['espaço', '+', 'arrastar']],
@@ -10,7 +10,9 @@ const SHORTCUTS = [
   ['Desfazer', ['⌘', 'Z']],
   ['Refazer', ['⇧', '⌘', 'Z']],
   ['Duplicar', ['⌘', 'D']],
+  ['Biblioteca', ['M']],
   ['Enquadrar', ['0']],
+  ['Fechar', ['esc']],
   ['Apagar', ['delete']],
 ]
 
@@ -50,6 +52,16 @@ export default function HelpModal({ onClose }) {
             <p>Abra “Testar fluxo” para percorrer os caminhos, ouvir áudios e assistir aos vídeos como seu cliente faria.</p>
           </div>
           <div className="help-card">
+            <span className="help-card-icon"><FolderOpen size={17} /></span>
+            <h3>Mídias à mão</h3>
+            <p>Abra a biblioteca pelo ícone de pasta (ou tecla M), envie uma vez e arraste para qualquer balão. No celular, toque para inserir no balão selecionado.</p>
+          </div>
+          <div className="help-card">
+            <span className="help-card-icon"><Layers size={17} /></span>
+            <h3>Um balão, várias camadas</h3>
+            <p>Misture texto, áudio, foto e vídeo no mesmo balão. Use as setas do painel para mudar a ordem de cada bloco.</p>
+          </div>
+          <div className="help-card">
             <span className="help-card-icon"><Command size={17} /></span>
             <h3>Salvamento automático</h3>
             <p>Cada edição fica salva neste navegador. Exporte um JSON quando quiser levar o fluxo para outro lugar.</p>
@@ -72,7 +84,7 @@ export default function HelpModal({ onClose }) {
             ))}
           </div>
         </div>
-        <p className="help-foot">Dica: clique em um balão e use o painel da direita para trocar a cor da ligação, a mídia e o rótulo.</p>
+        <p className="help-foot">Dica: clique em um balão e use o painel da direita para montar o conteúdo, trocar a cor da ligação e organizar cada bloco.</p>
       </div>
     </div>
   )
