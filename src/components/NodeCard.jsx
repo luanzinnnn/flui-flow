@@ -160,7 +160,7 @@ export default function NodeCard({
   node, selected, isTarget, connecting, editingBlockId, outEdges,
   onMeasure, onPointerDown, onStartConnect, onOpen, onDoubleClick,
   onStartEditBlock, onBlockTextChange, onEndEditBlock, onPickBlockMedia,
-  onDropAsset,
+  onDropAsset, onDropFiles,
 }) {
   const ref = useRef(null)
   const dragDepth = useRef(0)
@@ -201,7 +201,7 @@ export default function NodeCard({
 
   const hasDragPayload = (e) => {
     const types = Array.from(e.dataTransfer?.types || [])
-    return types.includes('application/x-flui-asset') || types.includes('text/plain')
+    return types.includes('application/x-flui-asset') || types.includes('Files') || types.includes('text/plain')
   }
 
   const onDragEnter = (e) => {
@@ -227,6 +227,11 @@ export default function NodeCard({
     e.stopPropagation()
     dragDepth.current = 0
     setDragOver(false)
+    const files = Array.from(e.dataTransfer.files || [])
+    if (files.length) {
+      onDropFiles?.(node.id, files)
+      return
+    }
     const assetId = e.dataTransfer.getData('application/x-flui-asset')
       || (e.dataTransfer.getData('text/plain')?.startsWith('flui:') ? e.dataTransfer.getData('text/plain').slice(5) : '')
     if (assetId) onDropAsset(node.id, assetId)

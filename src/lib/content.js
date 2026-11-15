@@ -199,3 +199,17 @@ export function describeBlock(block) {
   if (block.kind === 'text') return block.text?.trim()?.slice(0, 46) || 'Texto vazio'
   return block.media?.name || BLOCK_META[block.kind]?.label || 'Mídia'
 }
+
+export const MAX_TEXT_FILE_BYTES = 300 * 1024
+export const MAX_TEXT_BLOCK_CHARS = 4000
+
+export function isTextFile(file) {
+  if (!file) return false
+  const type = String(file.type || '').toLowerCase()
+  const name = String(file.name || '').toLowerCase()
+  return type === 'text/plain' || type === 'text/markdown' || /\.(txt|md|markdown)$/.test(name)
+}
+
+export function textFilePreviewName(file, fallback = 'Arquivo de texto') {
+  return String(file?.name || fallback).replace(/\.[^.]+$/, '') || fallback
+}

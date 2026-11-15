@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MousePointer2, ZoomIn } from 'lucide-react'
+import { FileUp, MousePointer2, ZoomIn } from 'lucide-react'
 import TopBar from './components/TopBar.jsx'
 import ToolRail from './components/ToolRail.jsx'
 import NodeCard from './components/NodeCard.jsx'
@@ -12,6 +12,7 @@ import TemplatesModal from './components/TemplatesModal.jsx'
 import HelpModal from './components/HelpModal.jsx'
 import PreviewModal from './components/PreviewModal.jsx'
 import MediaShelf from './components/MediaShelf.jsx'
+import AssistantPanel from './components/AssistantPanel.jsx'
 import Toast from './components/Toast.jsx'
 import {
   createBlankDoc, createDocFromTemplate, EDGE_COLORS, ESTIMATED_HEIGHT,
@@ -22,8 +23,9 @@ import { useFlowHistory } from './lib/useFlowHistory.js'
 import { downloadJSON, loadDoc, loadView, saveDoc, saveView } from './lib/storage.js'
 import { putMedia } from './lib/mediaStore.js'
 import {
-  assetToBlock, findEmptyMediaBlock, isMessageNode, makeLibraryAsset, makeMediaBlock,
-  makeTextBlock, mediaKindFromFile, mergeLibraries, normalizeDoc,
+  assetToBlock, blockHasMedia, findEmptyMediaBlock, isMessageNode, isTextFile,
+  makeLibraryAsset, makeMediaBlock, makeTextBlock, MAX_TEXT_BLOCK_CHARS, MAX_TEXT_FILE_BYTES,
+  mediaKindFromFile, mergeLibraries, normalizeDoc,
 } from './lib/content.js'
 
 const DEFAULT_VIEW = () => {
@@ -93,6 +95,8 @@ export default function App() {
   const [selected, setSelected] = useState(null)
   const [editingBlock, setEditingBlock] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [connecting, setConnecting] = useState(null)
   const [panning, setPanning] = useState(false)
   const [draggingId, setDraggingId] = useState(null)
@@ -108,6 +112,7 @@ export default function App() {
   const pickerRef = useRef(null)
   const connectCleanupRef = useRef(null)
   const pinchRef = useRef(null)
+  const dropBusyRef = useRef(false)
   const toastTimerRef = useRef(null)
   const mountedRef = useRef(true)
 
@@ -834,14 +839,221 @@ export default function App() {
     if (window.innerWidth <= 900) setLibraryOpen(false)
   }, [selectedMessageNode, addAssetToNode, createNodeFromAsset])
 
+  const processDroppedFiles = useCallback(async (files) => {
+    const blocks = []
+    const assets = []
+    const errors = []
+    let truncated = 0
+    for (const file of files) {
+      if (isTextFile(file)) {
+        if (file.size > MAX_TEXT_FILE_BYTES) {
+          errors.push(`${file.name}: texto acima de ${Math.round(MAX_TEXT_FILE_BYTES / 1024)} KB`)
+          continue
+        }
+        try {
+          let text = (await file.text()).replace(/\r\n?/g, '\n').trim()
+          if (!text) {
+            errors.push(`${file.name}: arquivo vazio`)
+            continue
+          }
+          if (text.length > MAX_TEXT_BLOCK_CHARS) {
+            text = text.slice(0, MAX_TEXT_BLOCK_CHARS).trimEnd()
+            truncated += 1
+          }
+          blocks.push(makeTextBlock(text))
+        } catch {
+          errors.push(`${file.name}: não consegui ler o texto`)
+        }
+        continue
+      }
+      const kind = mediaKindFromFile(file)
+      if (!kind) {
+        errors.push(`${file.name}: formato não suportado`)
+        continue
+      }
+      const error = validateMediaFile(file, kind)
+      if (error) {
+        errors.push(`${file.name}: ${error}`)
+        continue
+      }
+      try {
+        const asset = await storeAssetFromFile(file, kind)
+        assets.push(asset)
+        blocks.push(assetToBlock(asset))
+      } catch {
+        errors.push(`${file.name}: não consegui guardar`)
+      }
+    }
+    return { blocks, assets, errors, truncated }
+  }, [storeAssetFromFile])
+
+  const handleFilesDrop = useCallback(async (nodeId, files, point) => {
+    if (!files?.length) return
+    if (dropBusyRef.current) {
+      notify('Ainda estou preparando os arquivos anteriores.', { tone: 'info' })
+      return
+    }
+    dropBusyRef.current = true
+    setFileDragActive(false)
+    notify('Preparando arquivos…', { tone: 'info', duration: 1800 })
+    try {
+      const { blocks, assets, errors, truncated } = await processDroppedFiles(files)
+      if (!blocks.length) {
+        notify(errors[0] || 'Nenhum arquivo compatível foi encontrado.', { tone: 'error', duration: 5000 })
+        return
+      }
+
+      let addedTo = null
+      if (nodeId) {
+        const node = docRef.current.nodes.find((n) => n.id === nodeId)
+        if (node && isMessageNode(node)) {
+          const nextBlocks = [...(node.blocks || [])]
+          const used = new Set()
+          for (const block of blocks) {
+            if (block.kind !== 'text') {
+              const emptyIndex = nextBlocks.findIndex((b, index) => (
+                b.kind === block.kind && !blockHasMedia(b) && !used.has(index)
+              ))
+              if (emptyIndex >= 0) {
+                nextBlocks[emptyIndex] = { ...block, id: nextBlocks[emptyIndex].id }
+                used.add(emptyIndex)
+                continue
+              }
+            }
+            nextBlocks.push(block)
+          }
+          apply((prev) => ({
+            ...prev,
+            library: mergeLibraries(assets, prev.library),
+            nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, blocks: nextBlocks } : n)),
+          }))
+          setSelected({ type: 'node', id: nodeId })
+          setEditingBlock(null)
+          addedTo = node
+        }
+      }
+
+      if (!addedTo) {
+        const primaryKind = blocks.find((b) => b.kind !== 'text')?.kind || 'text'
+        const height = nodeHeight({ blocks })
+        const worldPoint = point || screenToWorld(window.innerWidth / 2, window.innerHeight / 2)
+        const newNode = {
+          id: uid(primaryKind),
+          type: primaryKind,
+          x: Math.round(worldPoint.x - 152),
+          y: Math.round(worldPoint.y - 42),
+          w: 304,
+          accent: NODE_TYPES[primaryKind].accent,
+          title: '',
+          blocks,
+        }
+        apply((prev) => ({
+          ...prev,
+          library: mergeLibraries(assets, prev.library),
+          nodes: [...prev.nodes, newNode],
+        }))
+        setSelected({ type: 'node', id: newNode.id })
+        setEditingBlock(null)
+        requestAnimationFrame(() => ensureVisible(newNode))
+        addedTo = newNode
+      }
+
+      const kindCount = blocks.length
+      let message = addedTo && !nodeId
+        ? `${kindCount === 1 ? 'Conteúdo adicionado' : `${kindCount} conteúdos adicionados`} em um novo balão.`
+        : `${kindCount === 1 ? 'Conteúdo adicionado' : `${kindCount} conteúdos adicionados`} ao balão.`
+      if (truncated) message += ` ${truncated} texto${truncated > 1 ? 's' : ''} limitado${truncated > 1 ? 's' : ''} a ${MAX_TEXT_BLOCK_CHARS.toLocaleString('pt-BR')} caracteres.`
+      if (errors.length) message += ` ${errors.length} arquivo${errors.length > 1 ? 's' : ''} ignorado${errors.length > 1 ? 's' : ''}.`
+      notify(message, { tone: errors.length ? 'info' : 'success', duration: 5000 })
+    } finally {
+      dropBusyRef.current = false
+    }
+  }, [apply, docRef, ensureVisible, notify, processDroppedFiles, screenToWorld])
+
+  const handleNodeDropFiles = useCallback((nodeId, files) => {
+    handleFilesDrop(nodeId, files, null)
+  }, [handleFilesDrop])
+
+  const isFileDrag = useCallback((e) => {
+    return Array.from(e.dataTransfer?.types || []).includes('Files')
+  }, [])
+
+  const handleCanvasDragEnter = useCallback((e) => {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    setFileDragActive(true)
+  }, [isFileDrag])
+
+  const handleCanvasDragOver = useCallback((e) => {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    if (!fileDragActive) setFileDragActive(true)
+  }, [fileDragActive, isFileDrag])
+
+  const handleCanvasDragLeave = useCallback((e) => {
+    if (!isFileDrag(e)) return
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return
+    setFileDragActive(false)
+  }, [isFileDrag])
+
+  const handleCanvasDrop = useCallback((e) => {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    setFileDragActive(false)
+    const files = Array.from(e.dataTransfer.files || [])
+    if (!files.length) return
+    if (e.target.closest('.node')) {
+      notify('Solte arquivos em um balão de mensagem ou em um espaço vazio do canvas.', { tone: 'info', duration: 4500 })
+      return
+    }
+    handleFilesDrop(null, files, screenToWorld(e.clientX, e.clientY))
+  }, [handleFilesDrop, isFileDrag, notify, screenToWorld])
+
+  useEffect(() => {
+    const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files')
+    const onDragOver = (e) => {
+      if (hasFiles(e)) e.preventDefault()
+    }
+    const onDrop = (e) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      setFileDragActive(false)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [])
+
   const handleDropAsset = useCallback((nodeId, assetId) => {
     const asset = (docRef.current.library || []).find((item) => item.id === assetId)
     if (asset) addAssetToNode(nodeId, asset)
   }, [addAssetToNode, docRef])
 
-  const openLibrary = useCallback(() => setLibraryOpen(true), [])
+  const openLibrary = useCallback(() => {
+    setAssistantOpen(false)
+    setLibraryOpen(true)
+  }, [])
   const closeLibrary = useCallback(() => setLibraryOpen(false), [])
-  const toggleLibrary = useCallback(() => setLibraryOpen((open) => !open), [])
+  const toggleLibrary = useCallback(() => {
+    setLibraryOpen((open) => {
+      if (!open) setAssistantOpen(false)
+      return !open
+    })
+  }, [])
+  const toggleAssistant = useCallback(() => {
+    setAssistantOpen((open) => {
+      if (!open) {
+        setLibraryOpen(false)
+        setEditingBlock(null)
+      }
+      return !open
+    })
+  }, [])
 
   const handleFilePicked = useCallback((e) => {
     const files = Array.from(e.target.files || [])
@@ -1063,6 +1275,7 @@ export default function App() {
     if (!modal) return undefined
     setEditingBlock(null)
     setLibraryOpen(false)
+    setAssistantOpen(false)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previous }
@@ -1151,6 +1364,10 @@ export default function App() {
       const typing = isTextInput(e.target)
       if (e.key === 'Escape') {
         if (modal) return
+        if (assistantOpen) {
+          setAssistantOpen(false)
+          return
+        }
         if (libraryOpen) {
           setLibraryOpen(false)
           return
@@ -1177,7 +1394,21 @@ export default function App() {
       const meta = e.metaKey || e.ctrlKey
       if (!meta && e.key.toLowerCase() === 'm') {
         e.preventDefault()
-        setLibraryOpen((open) => !open)
+        setLibraryOpen((open) => {
+          if (!open) setAssistantOpen(false)
+          return !open
+        })
+        return
+      }
+      if (!meta && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setAssistantOpen((open) => {
+          if (!open) {
+            setLibraryOpen(false)
+            setEditingBlock(null)
+          }
+          return !open
+        })
         return
       }
       if (meta && e.key.toLowerCase() === 'z') {
@@ -1239,7 +1470,7 @@ export default function App() {
       window.removeEventListener('blur', onBlur)
     }
   }, [
-    modal, connecting, editingBlock, selected, cancelConnecting, redo, undo, libraryOpen,
+    modal, connecting, editingBlock, selected, cancelConnecting, redo, undo, libraryOpen, assistantOpen,
     duplicateSelection, handleExport, removeSelection, zoomCenter, fitView, setZoom100,
   ])
 
@@ -1271,7 +1502,7 @@ export default function App() {
   const hasNodes = doc.nodes.length > 0
 
   return (
-    <div className={`app ${modal ? 'has-modal' : ''} ${libraryOpen ? 'has-library' : ''}`}>
+    <div className={`app ${modal ? 'has-modal' : ''} ${libraryOpen ? 'has-library' : ''} ${assistantOpen ? 'has-assistant' : ''}`}>
       <div className="canvas-atmosphere" aria-hidden="true">
         <span className="atmo atmo-a" />
         <span className="atmo atmo-b" />
@@ -1283,6 +1514,10 @@ export default function App() {
         className={`canvas ${panning ? 'is-panning' : ''} ${spaceHeld ? 'is-space' : ''} ${connecting ? 'is-connecting' : ''}`}
         onPointerDown={handleCanvasPointerDown}
         onDoubleClick={handleCanvasDoubleClick}
+        onDragEnter={handleCanvasDragEnter}
+        onDragOver={handleCanvasDragOver}
+        onDragLeave={handleCanvasDragLeave}
+        onDrop={handleCanvasDrop}
       >
         <div
           className="grid"
@@ -1324,6 +1559,7 @@ export default function App() {
               onEndEditBlock={endEditingBlock}
               onPickBlockMedia={openBlockPicker}
               onDropAsset={handleDropAsset}
+              onDropFiles={handleNodeDropFiles}
             />
           ))}
         </div>
@@ -1335,6 +1571,16 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {fileDragActive && (
+        <div className="file-drop-hint" aria-hidden="true">
+          <span><FileUp size={17} /></span>
+          <div>
+            <strong>Solte para adicionar ao fluxo</strong>
+            <small>foto · áudio · vídeo · .txt</small>
+          </div>
+        </div>
+      )}
 
       <TopBar
         title={doc.title}
@@ -1354,6 +1600,8 @@ export default function App() {
         onLibrary={toggleLibrary}
         libraryOpen={libraryOpen}
         assetCount={(doc.library || []).length}
+        onAssistant={toggleAssistant}
+        assistantOpen={assistantOpen}
       />
 
       <div className="mobile-hint" aria-hidden="true">arraste para explorar · pinça para zoom</div>
@@ -1402,6 +1650,15 @@ export default function App() {
           onCenter={centerOnWorld}
         />
       )}
+
+      <AssistantPanel
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        doc={doc}
+        selected={selected}
+        selectedNode={selectedNode}
+        selectedEdge={selectedEdge}
+      />
 
       <Inspector
         selected={selected}

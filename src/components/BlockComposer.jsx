@@ -4,6 +4,7 @@ import {
   Mic, Plus, Square, Trash2, Type, Upload, Video,
 } from 'lucide-react'
 import { BLOCK_META } from '../data/flowData'
+import { MAX_TEXT_BLOCK_CHARS } from '../lib/content'
 import { useMediaSrc } from '../lib/useMediaSrc'
 import AudioPlayer from './AudioPlayer'
 
@@ -246,11 +247,11 @@ export default function BlockComposer({
                       rows={3}
                       placeholder="Escreva a mensagem…"
                       onChange={(e) => onPatchBlock(node.id, block.id, { text: e.target.value }, `block-text:${block.id}`)}
-                      maxLength={1200}
+                      maxLength={MAX_TEXT_BLOCK_CHARS}
                     />
                     <div className="composer-text-meta">
                       <span>Use **palavra** para negrito.</span>
-                      <span>{block.text.length}/1200</span>
+                      <span>{block.text.length}/{MAX_TEXT_BLOCK_CHARS}</span>
                     </div>
                   </div>
                 ) : (

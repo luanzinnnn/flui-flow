@@ -8,7 +8,7 @@ import Logo from './Logo'
 export default function TopBar({
   title, onTitleChange, saveState, onUndo, onRedo, canUndo, canRedo,
   onTemplates, onTest, onExport, onImport, onCopyLink, onHelp, onClear,
-  onLibrary, libraryOpen, assetCount,
+  onLibrary, libraryOpen, assetCount, onAssistant, assistantOpen,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -86,6 +86,18 @@ export default function TopBar({
           <span>Mídias</span>
           {assetCount > 0 && <span className="ghost-count">{assetCount}</span>}
         </button>
+        <button
+          type="button"
+          className={`copilot-trigger ${assistantOpen ? 'is-open' : ''}`}
+          onClick={onAssistant}
+          title="Copiloto DeepSeek (K)"
+          aria-label="Abrir copiloto DeepSeek"
+          aria-expanded={assistantOpen}
+        >
+          <Sparkles size={15} />
+          <span className="copilot-label">Copiloto</span>
+          <i className="copilot-live" />
+        </button>
         <div className="menu-wrap" ref={menuRef}>
           <button
             type="button"
@@ -101,6 +113,7 @@ export default function TopBar({
               <div className="menu-heading">Fluxo</div>
               {item(<LayoutGrid size={15} />, 'Modelos de fluxo', onTemplates)}
               {item(<FolderOpen size={15} />, 'Biblioteca de mídias', onLibrary, 'M')}
+              {item(<Sparkles size={15} />, 'Copiloto DeepSeek', onAssistant, 'K')}
               {item(<Download size={15} />, 'Exportar JSON', onExport)}
               {item(<Upload size={15} />, 'Importar JSON', onImport)}
               {item(<Link2 size={15} />, 'Copiar link do estúdio', onCopyLink)}

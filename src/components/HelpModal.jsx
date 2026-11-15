@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { ArrowRight, Command, FolderOpen, Keyboard, Layers, MousePointer2, Sparkles, X } from 'lucide-react'
+import { ArrowRight, Command, FolderOpen, Keyboard, Layers, Lock, MousePointer2, Sparkles, Wand2, X } from 'lucide-react'
 
 const SHORTCUTS = [
   ['Arrastar a tela', ['espaço', '+', 'arrastar']],
@@ -11,8 +11,10 @@ const SHORTCUTS = [
   ['Refazer', ['⇧', '⌘', 'Z']],
   ['Duplicar', ['⌘', 'D']],
   ['Biblioteca', ['M']],
+  ['Copiloto', ['K']],
   ['Enquadrar', ['0']],
   ['Fechar', ['esc']],
+  ['Ajuda', ['?']],
   ['Apagar', ['delete']],
 ]
 
@@ -54,12 +56,22 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><FolderOpen size={17} /></span>
             <h3>Mídias à mão</h3>
-            <p>Abra a biblioteca pelo ícone de pasta (ou tecla M), envie uma vez e arraste para qualquer balão. No celular, toque para inserir no balão selecionado.</p>
+            <p>Abra a biblioteca pelo ícone de pasta (ou tecla M), envie uma vez e arraste para qualquer balão. Você também pode arrastar fotos, áudios, vídeos e arquivos .txt direto do seu computador para o canvas ou para dentro de um balão.</p>
           </div>
           <div className="help-card">
             <span className="help-card-icon"><Layers size={17} /></span>
             <h3>Um balão, várias camadas</h3>
             <p>Misture texto, áudio, foto e vídeo no mesmo balão. Use as setas do painel para mudar a ordem de cada bloco.</p>
+          </div>
+          <div className="help-card">
+            <span className="help-card-icon"><Wand2 size={17} /></span>
+            <h3>Copiloto DeepSeek</h3>
+            <p>Abra o Copiloto (K), conecte sua chave e pergunte o que responder em cada balão. Ele lê o fluxo inteiro, os caminhos e o balão em foco.</p>
+          </div>
+          <div className="help-card">
+            <span className="help-card-icon"><Lock size={17} /></span>
+            <h3>Sua chave, seu controle</h3>
+            <p>A chave da DeepSeek fica só na memória desta aba e é enviada direto para a API oficial. O fluxo é enviado apenas quando você pede uma resposta.</p>
           </div>
           <div className="help-card">
             <span className="help-card-icon"><Command size={17} /></span>
