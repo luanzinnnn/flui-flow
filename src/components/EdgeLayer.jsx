@@ -4,7 +4,7 @@ import { getBezier, getConnectionPreview } from '../lib/geometry'
 const safeId = (value) => String(value).replace(/[^a-zA-Z0-9]/g, '')
 
 function EdgeLayer({
-  nodes, edges, sizes, selectedEdgeId, selectedNodeId, connecting, onSelectEdge, overview = false, showLabels = true,
+  nodes, edges, sizes, selectedEdgeId, selectedNodeId, connecting, onSelectEdge, onNavigateEdge, onHoverEdge, overview = false, showLabels = true,
 }) {
   const boxes = useMemo(() => {
     const map = {}
@@ -81,9 +81,14 @@ function EdgeLayer({
               <path
                 className="edge-hit"
                 d={geo.path}
-                onPointerDown={(e) => {
+                title="Clique para abrir o balão de destino"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerEnter={(e) => onHoverEdge?.(edge, e)}
+                onPointerLeave={() => onHoverEdge?.(null)}
+                onClick={(e) => {
                   e.stopPropagation()
-                  onSelectEdge(edge.id)
+                  if (e.altKey || e.shiftKey) onSelectEdge(edge.id)
+                  else onNavigateEdge?.(edge)
                 }}
               />
             </g>

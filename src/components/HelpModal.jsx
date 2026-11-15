@@ -48,7 +48,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><ArrowRight size={17} /></span>
             <h3>Ligue os pontos</h3>
-            <p>Passe o mouse em um balão e arraste a bolinha à direita até outro balão. Solte no vazio para criar um novo já conectado.</p>
+            <p>Passe o mouse em um balão e arraste a bolinha à direita até outro balão. Solte no vazio para criar um novo já conectado. Clique na linha para abrir o balão de destino; clique no rótulo para editar a ligação.</p>
           </div>
           <div className="help-card">
             <span className="help-card-icon"><Sparkles size={17} /></span>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileUp, MousePointer2, ZoomIn } from 'lucide-react'
+import { ArrowUpRight, FileUp, MousePointer2, ZoomIn } from 'lucide-react'
 import TopBar from './components/TopBar.jsx'
 import ToolRail from './components/ToolRail.jsx'
 import NodeCard from './components/NodeCard.jsx'
@@ -167,6 +167,7 @@ export default function App() {
   const sizesRef = useRef({})
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight })
   const [selected, setSelected] = useState(null)
+  const [edgeHover, setEdgeHover] = useState(null)
   const [editingBlock, setEditingBlock] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
@@ -1672,6 +1673,47 @@ export default function App() {
     setEditingBlock(null)
   }, [])
 
+  const handleEdgeHover = useCallback((edge, event) => {
+    if (!edge || !event) {
+      setEdgeHover(null)
+      return
+    }
+    const nodes = docRef.current.nodes
+    const target = nodes.find((node) => node.id === edge.to)
+    if (!target) {
+      setEdgeHover(null)
+      return
+    }
+    setEdgeHover({
+      id: edge.id,
+      x: event.clientX,
+      y: event.clientY,
+      color: edge.color || '#8b5cf6',
+      label: edge.label || '',
+      targetTitle: target.title?.trim() || 'Balão de destino',
+      sourceTitle: nodes.find((node) => node.id === edge.from)?.title?.trim() || '',
+    })
+  }, [docRef])
+
+  const navigateToEdgeTarget = useCallback((edge) => {
+    const target = docRef.current.nodes.find((node) => node.id === edge.to)
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!target || !rect) return
+    const zoom = Math.max(viewRef.current.zoom, 0.82)
+    const rightInset = window.innerWidth > 900 ? (assistantOpen ? 404 : 388) : 0
+    const availableWidth = Math.max(320, rect.width - rightInset)
+    const nodeW = sizesRef.current[target.id]?.w || target.w || 304
+    const nodeH = sizesRef.current[target.id]?.h || nodeHeight(target)
+    setEdgeHover(null)
+    commitView({
+      zoom,
+      x: availableWidth / 2 - (target.x + nodeW / 2) * zoom,
+      y: rect.height / 2 - (target.y + nodeH / 2) * zoom,
+    })
+    setSelected({ type: 'node', id: target.id })
+    setEditingBlock(null)
+  }, [assistantOpen, commitView, docRef])
+
   const handleNodeDoubleClick = useCallback((node) => {
     setSelected({ type: 'node', id: node.id })
     const blocks = node.blocks || []
@@ -1998,6 +2040,8 @@ export default function App() {
             overview={overviewMode}
             showLabels={showEdgeLabels}
             onSelectEdge={handleSelectEdge}
+            onNavigateEdge={navigateToEdgeTarget}
+            onHoverEdge={handleEdgeHover}
           />
           {doc.nodes.map((node) => (
             <NodeCard
@@ -2039,6 +2083,24 @@ export default function App() {
             <strong>Solte para adicionar ao fluxo</strong>
             <small>foto · áudio · vídeo · .txt</small>
           </div>
+        </div>
+      )}
+
+      {edgeHover && !modal && (
+        <div
+          className="edge-hover-card"
+          style={{
+            left: `${Math.max(8, Math.min(edgeHover.x + 14, window.innerWidth - 342))}px`,
+            top: `${Math.max(8, Math.min(edgeHover.y + 16, window.innerHeight - 102))}px`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="edge-hover-dot" style={{ background: edgeHover.color }} />
+          <div className="edge-hover-copy">
+            {edgeHover.label && <small>{edgeHover.label}</small>}
+            <strong>{edgeHover.targetTitle}</strong>
+          </div>
+          <span className="edge-hover-go">clique p/ abrir <ArrowUpRight size={12} /></span>
         </div>
       )}
 
