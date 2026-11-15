@@ -1,7 +1,7 @@
 export const MAX_ATTACHMENTS = 5
 export const MAX_FILE_BYTES = 20 * 1024 * 1024
-export const MAX_FILE_CHARS = 20000
-export const MAX_TOTAL_CHARS = 32000
+export const MAX_FILE_CHARS = 65000
+export const MAX_TOTAL_CHARS = 65000
 
 const SUPPORTED_TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'html', 'htm', 'xml',

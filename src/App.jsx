@@ -93,6 +93,30 @@ function edgeLabelFor(source, outCount) {
   return ''
 }
 
+const MARI_SEED_KEY = 'flui:mari-support-seeded:v1'
+
+function ensureSupportFlow(library) {
+  try {
+    if (localStorage.getItem(MARI_SEED_KEY)) return library
+    const existing = library.flows.some((flow) => flow.doc?.templateId === 'mari-suporte-30d')
+    if (!existing) {
+      const template = TEMPLATES.find((item) => item.id === 'mari-suporte-30d')
+      if (template) {
+        const supportDoc = createDocFromTemplate(template)
+        library.flows.push(makeFlowRecord({
+          doc: supportDoc,
+          view: { x: 100, y: 80, zoom: 0.3 },
+        }))
+      }
+    }
+    saveFlowLibrary(library)
+    localStorage.setItem(MARI_SEED_KEY, '1')
+  } catch {
+    // Se o armazenamento local estiver indisponível, o fluxo ainda pode ser aplicado pelos modelos.
+  }
+  return library
+}
+
 export default function App() {
   const boot = useMemo(() => {
     const saved = loadFlowLibrary()
@@ -103,6 +127,7 @@ export default function App() {
       active.doc = nextDoc
       active.view = nextView
       saved.activeId = active.id
+      ensureSupportFlow(saved)
       saveFlowLibrary(saved)
       return { library: saved, doc: nextDoc, view: nextView, activeId: active.id }
     }
@@ -110,7 +135,7 @@ export default function App() {
     const legacyView = loadView()
     const nextView = isValidView(legacyView) ? legacyView : DEFAULT_VIEW()
     const record = makeFlowRecord({ doc: nextDoc, view: nextView })
-    const library = { version: 1, activeId: record.id, flows: [record] }
+    const library = ensureSupportFlow({ version: 1, activeId: record.id, flows: [record] })
     saveFlowLibrary(library)
     return { library, doc: nextDoc, view: nextView, activeId: record.id }
   }, [])
@@ -1253,6 +1278,192 @@ export default function App() {
   }, [createFlowFromTemplate])
 
 
+  const applyAssistantActions = useCallback((rawActions) => {
+    if (!Array.isArray(rawActions) || !rawActions.length) {
+      return { ok: false, error: 'O copiloto não enviou nenhuma alteração aplicável.' }
+    }
+    if (rawActions.length > 80) {
+      return { ok: false, error: 'Muitas alterações de uma vez. Peça para o copiloto dividir em partes menores.' }
+    }
+    const base = docRef.current
+    let nodes = [...base.nodes]
+    let edges = [...base.edges]
+    let title = base.title
+    const idMap = new Map()
+    const created = []
+    const updated = []
+    let edgesAdded = 0
+    let deleted = 0
+    let skipped = 0
+    let changed = false
+    const allowedTypes = new Set(['text', 'condition', 'delay'])
+    const isHex = (value) => /^#[0-9a-f]{6}$/i.test(String(value || ''))
+    const titleOf = (value, fallback) => {
+      const clean = String(value || '').trim().slice(0, 64)
+      return clean || fallback
+    }
+    const resolveNodeId = (value) => {
+      const key = String(value || '').trim().replace(/^\[|\]$/g, '')
+      if (idMap.has(key)) return idMap.get(key)
+      return nodes.some((n) => n.id === key) ? key : null
+    }
+    const maxX = nodes.reduce((max, n) => Math.max(max, n.x + (n.w || 304)), 0)
+    const minY = nodes.reduce((min, n) => Math.min(min, n.y), 240)
+    let autoIndex = 0
+
+    for (const action of rawActions) {
+      if (!action || typeof action !== 'object') { skipped += 1; continue }
+      const op = String(action.op || '')
+      if (op === 'set_title') {
+        const nextTitle = String(action.title || '').trim()
+        if (nextTitle) { title = nextTitle.slice(0, 80); changed = true }
+        continue
+      }
+      if (op === 'add_node') {
+        const type = allowedTypes.has(action.type) ? action.type : 'text'
+        if (!allowedTypes.has(action.type)) skipped += 1
+        let x = Number(action.x)
+        let y = Number(action.y)
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          x = maxX + 120 + (autoIndex % 2) * 340
+          y = minY + Math.floor(autoIndex / 2) * 290
+          autoIndex += 1
+        }
+        const spot = freeSpot(x, y, nodes)
+        const actualId = uid(`ai-${type}`)
+        const tempId = String(action.id || actualId)
+        const accent = isHex(action.accent) ? action.accent : NODE_TYPES[type]?.accent || '#8b5cf6'
+        const note = String(action.note || '').trim().slice(0, 8000)
+        let node
+        if (type === 'condition') {
+          node = {
+            id: actualId, type, x: spot.x, y: spot.y, w: 304, accent,
+            title: titleOf(action.title, 'Nova condição'),
+            text: String(action.text || '').slice(0, 900),
+            ...(note ? { note } : {}),
+          }
+        } else if (type === 'delay') {
+          node = {
+            id: actualId, type, x: spot.x, y: spot.y, w: 304, accent,
+            title: titleOf(action.title, 'Nova espera'),
+            delay: {
+              value: Math.max(1, Number(action.delay?.value) || 2),
+              unit: ['minutos', 'horas', 'dias'].includes(action.delay?.unit) ? action.delay.unit : 'horas',
+            },
+            ...(note ? { note } : {}),
+          }
+        } else {
+          const message = String(action.message ?? action.text ?? '').trim()
+          node = {
+            id: actualId, type: 'text', x: spot.x, y: spot.y, w: 304, accent,
+            title: titleOf(action.title, 'Nova mensagem'),
+            note: note || undefined,
+            blocks: [makeTextBlock(message || 'Nova mensagem')],
+          }
+          if (!note) delete node.note
+        }
+        nodes.push(node)
+        idMap.set(tempId, actualId)
+        created.push({ id: actualId, title: node.title })
+        changed = true
+        continue
+      }
+      if (op === 'add_edge') {
+        const from = resolveNodeId(action.from)
+        const to = resolveNodeId(action.to)
+        if (!from || !to || from === to) { skipped += 1; continue }
+        const source = nodes.find((n) => n.id === from)
+        const label = String(action.label || '').trim().slice(0, 120)
+        const duplicate = edges.some((e) => e.from === from && e.to === to && (e.label || '') === label)
+        if (duplicate) { skipped += 1; continue }
+        edges.push({
+          id: uid('ai-e'), from, to, label,
+          color: isHex(action.color) ? action.color : (source?.accent || '#8b5cf6'),
+          animated: true, dashed: false,
+        })
+        edgesAdded += 1
+        changed = true
+        continue
+      }
+      if (op === 'update_node') {
+        const id = resolveNodeId(action.id)
+        const index = nodes.findIndex((n) => n.id === id)
+        if (index < 0) { skipped += 1; continue }
+        const node = nodes[index]
+        const next = { ...node }
+        if (action.title !== undefined) next.title = titleOf(action.title, node.title || 'Balão')
+        if (action.note !== undefined) next.note = String(action.note || '').slice(0, 8000)
+        if (action.accent && isHex(action.accent)) next.accent = action.accent
+        if (action.message !== undefined && isMessageNode(node)) {
+          const message = String(action.message || '')
+          const blocks = [...(node.blocks || [])]
+          const blockIndex = blocks.findIndex((b) => b.kind === 'text')
+          if (blockIndex >= 0) blocks[blockIndex] = { ...blocks[blockIndex], text: message }
+          else blocks.unshift(makeTextBlock(message))
+          next.blocks = blocks
+        }
+        if (action.text !== undefined && node.type === 'condition') next.text = String(action.text || '').slice(0, 900)
+        nodes[index] = next
+        updated.push({ id: node.id, title: next.title })
+        changed = true
+        continue
+      }
+      if (op === 'delete_node') {
+        const id = resolveNodeId(action.id)
+        const node = nodes.find((n) => n.id === id)
+        if (!node || node.type === 'start') { skipped += 1; continue }
+        const before = nodes.length + edges.length
+        nodes = nodes.filter((n) => n.id !== id)
+        edges = edges.filter((e) => e.from !== id && e.to !== id)
+        deleted += before - (nodes.length + edges.length)
+        changed = true
+        continue
+      }
+      if (op === 'delete_edge') {
+        const id = String(action.id || '')
+        const before = edges.length
+        edges = edges.filter((e) => e.id !== id)
+        if (edges.length !== before) { deleted += before - edges.length; changed = true }
+        else skipped += 1
+        continue
+      }
+      skipped += 1
+    }
+
+    if (!changed) {
+      return { ok: false, error: 'O copiloto não propôs uma alteração válida para este fluxo.' }
+    }
+    if (nodes.length > 160) {
+      return { ok: false, error: 'Esse fluxo ficaria grande demais. Peça as alterações em partes menores.' }
+    }
+
+    apply(() => ({ ...base, title, nodes, edges }))
+    const selectedId = created[0]?.id || updated[0]?.id
+    if (selectedId) {
+      setSelected({ type: 'node', id: selectedId })
+      setEditingBlock(null)
+      const selectedNode = nodes.find((n) => n.id === selectedId)
+      if (selectedNode) requestAnimationFrame(() => ensureVisible(selectedNode))
+    }
+    const pieces = []
+    if (created.length) pieces.push(`${created.length} ${created.length === 1 ? 'balão criado' : 'balões criados'}`)
+    if (updated.length) pieces.push(`${updated.length} ${updated.length === 1 ? 'balão atualizado' : 'balões atualizados'}`)
+    if (edgesAdded) pieces.push(`${edgesAdded} ${edgesAdded === 1 ? 'ligação criada' : 'ligações criadas'}`)
+    if (deleted) pieces.push(`${deleted} ${deleted === 1 ? 'item removido' : 'itens removidos'}`)
+    if (skipped) pieces.push(`${skipped} ${skipped === 1 ? 'ação ignorada' : 'ações ignoradas'}`)
+    const summary = pieces.join(' · ') || 'Fluxo atualizado'
+    notify(`${summary}.`, { tone: 'success', actionLabel: 'Desfazer', onAction: undo, duration: 7000 })
+    return {
+      ok: true,
+      summary,
+      created: created.length,
+      updated: updated.length,
+      edges: edgesAdded,
+      deleted,
+      skipped,
+    }
+  }, [apply, docRef, ensureVisible, notify, undo])
+
   const openFlowLibrary = useCallback(() => {
     if (flowsOpen) {
       setFlowsOpen(false)
@@ -1874,6 +2085,7 @@ export default function App() {
         selected={selected}
         selectedNode={selectedNode}
         selectedEdge={selectedEdge}
+        onApplyActions={applyAssistantActions}
       />
 
       <Inspector

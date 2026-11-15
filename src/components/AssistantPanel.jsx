@@ -148,6 +148,47 @@ function MessageFiles({ attachments }) {
   )
 }
 
+function extractAssistantActions(content) {
+  const raw = String(content || '')
+  const actions = []
+  let cleaned = raw
+  let error = ''
+  let foundBlock = false
+  const blocks = [...raw.matchAll(/```([a-zA-Z0-9_.-]*)\s*\n?([\s\S]*?)```/g)]
+  for (const match of blocks) {
+    const language = String(match[1] || '').toLowerCase()
+    const isActionFence = language === 'flui_actions' || language === 'flui-actions'
+    const isJson = language === 'json' || language === ''
+    if (!isActionFence && !isJson) continue
+    let parsed
+    try {
+      parsed = JSON.parse(match[2].trim())
+    } catch {
+      if (isActionFence) {
+        foundBlock = true
+        error = 'O copiloto enviou ações em um formato que não consegui ler. Nada foi alterado.'
+        cleaned = cleaned.replace(match[0], '')
+      }
+      continue
+    }
+    if (Array.isArray(parsed?.actions)) {
+      foundBlock = true
+      actions.push(...parsed.actions)
+      cleaned = cleaned.replace(match[0], '')
+    } else if (Array.isArray(parsed)) {
+      foundBlock = true
+      actions.push(...parsed)
+      cleaned = cleaned.replace(match[0], '')
+    } else if (isActionFence) {
+      foundBlock = true
+      error = 'O bloco de ações veio sem a lista "actions". Nada foi alterado.'
+      cleaned = cleaned.replace(match[0], '')
+    }
+  }
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
+  return { text: cleaned, actions, error, foundBlock }
+}
+
 function apiErrorMessage(status, payload) {
   const detail = payload?.error?.message || payload?.message
   if (status === 401 || status === 403) {
@@ -215,7 +256,7 @@ function KeySetup({ hasKey, keyDraft, setKeyDraft, showKey, setShowKey, onConnec
 }
 
 export default function AssistantPanel({
-  open, onClose, doc, selected, selectedNode, selectedEdge,
+  open, onClose, doc, selected, selectedNode, selectedEdge, onApplyActions,
 }) {
   const [apiKey, setApiKey] = useState(readKey)
   const [editingKey, setEditingKey] = useState(false)
@@ -467,8 +508,8 @@ export default function AssistantPanel({
               .slice(-MAX_HISTORY)
               .map((message) => ({ role: message.role, content: message.content })),
           ],
-          temperature: 0.65,
-          max_tokens: 900,
+          temperature: 0.5,
+          max_tokens: 4096,
           stream: false,
         }),
       })
@@ -482,7 +523,23 @@ export default function AssistantPanel({
         setError({ message: 'A DeepSeek respondeu vazia. Tente reformular a pergunta.', key: false })
         return
       }
-      setMessages((current) => [...current, { id: nowId(), role: 'assistant', content }])
+      const parsed = extractAssistantActions(content)
+      let actionResult = null
+      let actionError = parsed.error
+      let visibleContent = parsed.text
+      if (parsed.actions.length) {
+        const result = onApplyActions?.(parsed.actions)
+        if (result?.ok) {
+          actionResult = result
+          if (!visibleContent) visibleContent = 'Alterações aplicadas ao fluxo.'
+        } else {
+          actionError = result?.error || 'Não consegui aplicar as alterações propostas.'
+        }
+      }
+      if (!visibleContent) visibleContent = 'Não consegui gerar uma resposta em texto.'
+      setMessages((current) => [...current, {
+        id: nowId(), role: 'assistant', content: visibleContent, actionResult, actionError,
+      }])
     } catch {
       setError({ message: 'Não consegui falar com a API da DeepSeek. Verifique sua internet e tente novamente.', key: false })
     } finally {
@@ -600,7 +657,7 @@ export default function AssistantPanel({
                 <span className="assistant-welcome-icon"><Sparkles size={19} /></span>
                 <span className="assistant-eyebrow">pronto para ajudar</span>
                 <h3>Estou com o seu fluxo inteiro na mão.</h3>
-                <p>Selecione um balão para eu focar nele, ou escolha uma skill acima. Posso sugerir respostas, reescrever mensagens, explicar caminhos e apontar onde o fluxo pode travar. Anexe PDF, DOCX, XLSX ou texto para eu ler e usar no que você pedir.</p>
+                <p>Selecione um balão para eu focar nele, ou escolha uma skill acima. Posso sugerir respostas, criar e editar balões, explicar caminhos e apontar onde o fluxo pode travar. Anexe PDF, DOCX, XLSX ou texto para eu ler e usar no que você pedir.</p>
                 <div className="assistant-welcome-note">
                   <MessageSquare size={12} /> Usa a API da DeepSeek com a sua chave.
                 </div>
@@ -626,6 +683,19 @@ export default function AssistantPanel({
                       </>
                     )}
                 </div>
+                {message.actionResult && (
+                  <div className="assistant-action-result">
+                    <Check size={12} />
+                    <span>{message.actionResult.summary}</span>
+                    <small>aplicado ao fluxo · Ctrl/⌘ Z desfaz</small>
+                  </div>
+                )}
+                {message.actionError && (
+                  <div className="assistant-action-error">
+                    <AlertTriangle size={12} />
+                    <span>{message.actionError}</span>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -708,7 +778,7 @@ export default function AssistantPanel({
             </div>
             <div className="assistant-input-foot">
               <span>Anexe arquivos · Enter envia</span>
-              <span>{isReading ? 'lendo arquivos…' : 'a IA pode errar; confira antes de usar.'}</span>
+              <span>{isReading ? 'lendo arquivos…' : 'posso alterar o fluxo; revise antes de usar.'}</span>
             </div>
           </div>
           <input
