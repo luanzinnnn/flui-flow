@@ -2,7 +2,7 @@
 
 **Estúdio visual de fluxos de mensagens.** Um canvas infinito para desenhar conversas com balões de texto, áudio, foto e vídeo — conectados por linhas que você pode colorir, rotular e testar antes de publicar.
 
-> Demo online: **https://luanzinnnn.github.io/flui-flow/**
+> Demo online: **https://fluiflow.space**
 
 ---
 
