@@ -68,7 +68,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><Wand2 size={17} /></span>
             <h3>Copiloto DeepSeek</h3>
-            <p>Abra o Copiloto (K), conecte sua chave e pergunte o que responder em cada balão. Ele lê o fluxo inteiro, os caminhos e o balão em foco.</p>
+            <p>Abra o Copiloto (K), conecte sua chave e pergunte o que responder em cada balão. Ele lê o fluxo inteiro, os caminhos e o balão em foco. Você também pode anexar PDF, DOCX, XLSX ou arquivos de texto para ele ler e usar na resposta.</p>
           </div>
           <div className="help-card">
             <span className="help-card-icon"><Lock size={17} /></span>

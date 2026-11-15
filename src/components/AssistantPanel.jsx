@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Eye, EyeOff,
-  GitBranch, KeyRound, Loader2, Lock, MessageSquare, Send, Sparkles, Trash2, Wand2, X,
+  File as FileIcon, FileSpreadsheet, FileText, GitBranch, KeyRound, Loader2, Lock,
+  MessageSquare, Paperclip, Send, Sparkles, Trash2, Upload, Wand2, X,
 } from 'lucide-react'
 import { buildAssistantSystemPrompt, buildFlowContext } from '../lib/assistantContext'
+import {
+  ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, buildAttachmentsPayload, extractAssistantFile,
+  formatFileSize, publicAttachmentMeta, validateAssistantFile,
+} from '../lib/assistantFiles'
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
 const DEEPSEEK_MODEL = 'deepseek-chat'
@@ -102,6 +107,47 @@ function CopyButton({ text, label = 'Copiar' }) {
   )
 }
 
+function attachmentIcon(label) {
+  if (String(label).toUpperCase().includes('XLSX')) return <FileSpreadsheet size={13} />
+  return <FileText size={13} />
+}
+
+function PendingAttachment({ attachment, onRemove }) {
+  const meta = attachment.status === 'reading'
+    ? 'lendo arquivo…'
+    : attachment.status === 'error'
+      ? attachment.error
+      : `${attachment.label} · ${formatFileSize(attachment.size)}${attachment.truncated ? ' · texto cortado' : ''}`
+  return (
+    <div className={`assistant-attachment ${attachment.status}`} title={attachment.status === 'error' ? attachment.error : attachment.name}>
+      <span className="assistant-attachment-icon">{attachmentIcon(attachment.label)}</span>
+      <div className="assistant-attachment-copy">
+        <strong>{attachment.name}</strong>
+        <small>{meta}</small>
+      </div>
+      {attachment.status === 'reading' && <Loader2 size={13} className="spin" />}
+      {attachment.status === 'error' && <AlertTriangle size={13} />}
+      <button type="button" className="assistant-attachment-remove" onClick={() => onRemove(attachment.id)} aria-label={`Remover ${attachment.name}`}>
+        <X size={11} />
+      </button>
+    </div>
+  )
+}
+
+function MessageFiles({ attachments }) {
+  if (!attachments?.length) return null
+  return (
+    <div className="assistant-msg-files">
+      {attachments.map((attachment) => (
+        <span className="assistant-msg-file" key={attachment.id || attachment.name}>
+          {attachmentIcon(attachment.label)}
+          <span>{attachment.name}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function apiErrorMessage(status, payload) {
   const detail = payload?.error?.message || payload?.message
   if (status === 401 || status === 403) {
@@ -162,7 +208,7 @@ function KeySetup({ hasKey, keyDraft, setKeyDraft, showKey, setShowKey, onConnec
       </div>
       <div className="assistant-security-note">
         <Lock size={12} />
-        <span>Sua chave fica apenas na memória desta aba (sessionStorage) e é enviada direto para a API da DeepSeek. O fluxo e as mensagens da conversa também são enviados quando você pede uma resposta. O flui não guarda sua chave em servidor.</span>
+        <span>Sua chave fica apenas na memória desta aba (sessionStorage) e é enviada direto para a API da DeepSeek. O fluxo, as mensagens e o conteúdo dos arquivos que você anexar também são enviados quando você pede uma resposta. O flui não guarda sua chave em servidor.</span>
       </div>
     </div>
   )
@@ -181,9 +227,19 @@ export default function AssistantPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showContext, setShowContext] = useState(false)
+  const [attachments, setAttachments] = useState([])
+  const [attachError, setAttachError] = useState('')
+  const [fileDrag, setFileDrag] = useState(false)
   const messagesRef = useRef(null)
   const inputRef = useRef(null)
   const sendingRef = useRef(false)
+  const fileInputRef = useRef(null)
+  const attachmentsRef = useRef([])
+
+  useEffect(() => { attachmentsRef.current = attachments }, [attachments])
+  useEffect(() => {
+    if (!open) setFileDrag(false)
+  }, [open])
 
   const contextInfo = useMemo(() => buildFlowContext(doc, selected), [doc, selected])
   const systemPrompt = useMemo(() => buildAssistantSystemPrompt(doc, selected), [doc, selected])
@@ -238,21 +294,162 @@ export default function AssistantPanel({
     setShowKey(false)
   }
 
+  const removeAttachment = (id) => {
+    setAttachments((current) => {
+      const next = current.filter((attachment) => attachment.id !== id)
+      attachmentsRef.current = next
+      return next
+    })
+  }
+
+  const addFiles = async (fileList) => {
+    const files = Array.from(fileList || [])
+    if (!files.length || loading) return
+    setAttachError('')
+    const current = attachmentsRef.current
+    const available = MAX_ATTACHMENTS - current.length
+    if (available <= 0) {
+      setAttachError(`Você pode anexar no máximo ${MAX_ATTACHMENTS} arquivos por mensagem.`)
+      return
+    }
+    const errors = []
+    const accepted = []
+    for (const file of files) {
+      if (accepted.length >= available) {
+        errors.push(`Limite de ${MAX_ATTACHMENTS} arquivos por mensagem.`)
+        break
+      }
+      const validation = validateAssistantFile(file)
+      if (validation) {
+        errors.push(`${file.name}: ${validation}`)
+        continue
+      }
+      accepted.push(file)
+    }
+    if (errors.length) {
+      setAttachError(errors.slice(0, 2).join(' '))
+    }
+    if (!accepted.length) return
+
+    const entries = accepted.map((file, index) => {
+      const label = file.name.split('.').pop()?.toUpperCase() || 'ARQUIVO'
+      return {
+        id: `att-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+        name: file.name,
+        size: file.size,
+        label,
+        status: 'reading',
+        text: '',
+        chars: 0,
+        truncated: false,
+        error: '',
+      }
+    })
+    const next = [...current, ...entries]
+    attachmentsRef.current = next
+    setAttachments(next)
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]
+      try {
+        const extracted = await extractAssistantFile(accepted[index])
+        const ready = {
+          ...entry,
+          ...extracted,
+          status: 'ready',
+          chars: extracted.fullChars,
+        }
+        setAttachments((currentList) => {
+          const nextList = currentList.map((item) => (item.id === entry.id ? ready : item))
+          attachmentsRef.current = nextList
+          return nextList
+        })
+      } catch (err) {
+        const message = err?.name === 'PasswordException'
+          ? 'PDF protegido por senha.'
+          : err?.message || 'Não consegui ler esse arquivo.'
+        const failed = { ...entry, status: 'error', error: message }
+        setAttachments((currentList) => {
+          const nextList = currentList.map((item) => (item.id === entry.id ? failed : item))
+          attachmentsRef.current = nextList
+          return nextList
+        })
+      }
+    }
+  }
+
+  const handleFileInput = (e) => {
+    addFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  const hasFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes('Files')
+
+  const handlePanelDragEnter = (e) => {
+    if (!hasFileDrag(e) || showSetup || loading) return
+    e.preventDefault()
+    e.stopPropagation()
+    setFileDrag(true)
+  }
+
+  const handlePanelDragOver = (e) => {
+    if (!hasFileDrag(e) || showSetup || loading) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    if (!fileDrag) setFileDrag(true)
+  }
+
+  const handlePanelDragLeave = (e) => {
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return
+    setFileDrag(false)
+  }
+
+  const handlePanelDrop = (e) => {
+    if (!hasFileDrag(e) || showSetup || loading) return
+    e.preventDefault()
+    e.stopPropagation()
+    setFileDrag(false)
+    addFiles(e.dataTransfer.files)
+  }
+
+  const isReading = attachments.some((attachment) => attachment.status === 'reading')
+  const hasAttachmentError = attachments.some((attachment) => attachment.status === 'error')
+  const readyAttachments = attachments.filter((attachment) => attachment.status === 'ready')
+
   const send = async (explicitText) => {
-    const prompt = (explicitText ?? input).trim()
-    if (!prompt || loading || sendingRef.current) return
+    const typed = (explicitText ?? input).trim()
+    if (loading || sendingRef.current || isReading) return
     if (!apiKey) {
       setEditingKey(true)
       setKeyError('Conecte sua chave DeepSeek para conversar com o copiloto.')
       return
     }
+    if (hasAttachmentError) {
+      setAttachError('Remova os arquivos marcados em vermelho antes de enviar.')
+      return
+    }
+    const attachmentsForMessage = attachments.filter((attachment) => attachment.status === 'ready')
+    if (!typed && !attachmentsForMessage.length) return
+    const displayContent = typed || 'Analise os arquivos anexados.'
+    const attachmentPayload = buildAttachmentsPayload(attachmentsForMessage)
+    const content = attachmentPayload ? `${displayContent}\n\n${attachmentPayload}` : displayContent
     sendingRef.current = true
     setError(null)
     setKeyError('')
-    const userMessage = { id: nowId(), role: 'user', content: prompt }
+    setAttachError('')
+    const userMessage = {
+      id: nowId(),
+      role: 'user',
+      content,
+      displayContent,
+      attachments: attachmentsForMessage.map(publicAttachmentMeta),
+    }
     const nextMessages = [...messages, userMessage]
     setMessages(nextMessages)
     setInput('')
+    setAttachments([])
+    attachmentsRef.current = []
     setLoading(true)
     try {
       const response = await fetch(DEEPSEEK_URL, {
@@ -304,6 +501,9 @@ export default function AssistantPanel({
   const clearConversation = () => {
     if (loading) return
     setMessages([])
+    setAttachments([])
+    attachmentsRef.current = []
+    setAttachError('')
     setError(null)
   }
 
@@ -315,6 +515,10 @@ export default function AssistantPanel({
       className={`assistant-panel ${open ? 'is-open' : ''}`}
       aria-label="Copiloto de fluxo DeepSeek"
       aria-hidden={!open}
+      onDragEnter={handlePanelDragEnter}
+      onDragOver={handlePanelDragOver}
+      onDragLeave={handlePanelDragLeave}
+      onDrop={handlePanelDrop}
     >
       <div className="assistant-head">
         <div className="assistant-brand">
@@ -383,7 +587,7 @@ export default function AssistantPanel({
             <span className="assistant-skills-label"><Wand2 size={11} /> skills do copiloto</span>
             <div className="assistant-skill-chips">
               {skills.map((skill) => (
-                <button type="button" key={skill} onClick={() => send(skill)} disabled={loading}>
+                <button type="button" key={skill} onClick={() => send(skill)} disabled={loading || isReading || hasAttachmentError}>
                   {skill}
                 </button>
               ))}
@@ -396,7 +600,7 @@ export default function AssistantPanel({
                 <span className="assistant-welcome-icon"><Sparkles size={19} /></span>
                 <span className="assistant-eyebrow">pronto para ajudar</span>
                 <h3>Estou com o seu fluxo inteiro na mão.</h3>
-                <p>Selecione um balão para eu focar nele, ou escolha uma skill acima. Posso sugerir respostas, reescrever mensagens, explicar caminhos e apontar onde o fluxo pode travar.</p>
+                <p>Selecione um balão para eu focar nele, ou escolha uma skill acima. Posso sugerir respostas, reescrever mensagens, explicar caminhos e apontar onde o fluxo pode travar. Anexe PDF, DOCX, XLSX ou texto para eu ler e usar no que você pedir.</p>
                 <div className="assistant-welcome-note">
                   <MessageSquare size={12} /> Usa a API da DeepSeek com a sua chave.
                 </div>
@@ -415,7 +619,12 @@ export default function AssistantPanel({
                 <div className={`assistant-bubble ${message.role}`}>
                   {message.role === 'assistant'
                     ? <MarkdownLite content={message.content} />
-                    : message.content}
+                    : (
+                      <>
+                        <MessageFiles attachments={message.attachments} />
+                        {message.displayContent || message.content}
+                      </>
+                    )}
                 </div>
               </div>
             ))}
@@ -448,12 +657,36 @@ export default function AssistantPanel({
           </div>
 
           <div className="assistant-composer">
+            {attachments.length > 0 && (
+              <div className="assistant-attachments" aria-label="Arquivos anexados">
+                {attachments.map((attachment) => (
+                  <PendingAttachment key={attachment.id} attachment={attachment} onRemove={removeAttachment} />
+                ))}
+              </div>
+            )}
+            {attachError && (
+              <div className="assistant-attach-error">
+                <AlertTriangle size={12} />
+                <span>{attachError}</span>
+                <button type="button" onClick={() => setAttachError('')} aria-label="Fechar aviso"><X size={11} /></button>
+              </div>
+            )}
             <div className="assistant-input-wrap">
+              <button
+                type="button"
+                className="assistant-attach-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || attachments.length >= MAX_ATTACHMENTS}
+                title="Anexar PDF, DOCX, XLSX ou texto"
+                aria-label="Anexar arquivo"
+              >
+                <Paperclip size={15} />
+              </button>
               <textarea
                 ref={inputRef}
                 rows={1}
                 value={input}
-                placeholder={selectedNode ? `Pergunte sobre “${contextInfo.focusLabel}”…` : 'Pergunte sobre o fluxo…'}
+                placeholder={selectedNode ? `Pergunte sobre “${contextInfo.focusLabel}”…` : 'Pergunte ou anexe um arquivo…'}
                 onChange={(e) => {
                   setInput(e.target.value)
                   e.target.style.height = 'auto'
@@ -463,16 +696,38 @@ export default function AssistantPanel({
                 disabled={loading}
                 aria-label="Mensagem para o copiloto"
               />
-              <button type="button" className="assistant-send" onClick={() => send()} disabled={!input.trim() || loading} aria-label="Enviar pergunta">
+              <button
+                type="button"
+                className="assistant-send"
+                onClick={() => send()}
+                disabled={loading || isReading || hasAttachmentError || (!input.trim() && !readyAttachments.length)}
+                aria-label="Enviar pergunta"
+              >
                 {loading ? <Loader2 size={16} className="spin" /> : <Send size={15} />}
               </button>
             </div>
             <div className="assistant-input-foot">
-              <span>Enter envia · Shift + Enter quebra linha</span>
-              <span>a IA pode errar; confira antes de usar.</span>
+              <span>Anexe arquivos · Enter envia</span>
+              <span>{isReading ? 'lendo arquivos…' : 'a IA pode errar; confira antes de usar.'}</span>
             </div>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            onChange={handleFileInput}
+          />
         </>
+      )}
+
+      {fileDrag && (
+        <div className="assistant-file-drop" aria-hidden="true">
+          <Upload size={25} />
+          <strong>Solte os arquivos no copiloto</strong>
+          <small>PDF, DOCX, XLSX ou texto · até {MAX_ATTACHMENTS} arquivos</small>
+        </div>
       )}
     </aside>
   )

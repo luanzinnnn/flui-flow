@@ -1,6 +1,6 @@
 {
   "name": "flui",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "flui. — estúdio visual de fluxos de mensagens com biblioteca de mídias e balões de conteúdo misto.",
   "main": "index.js",
   "scripts": {
@@ -21,8 +21,11 @@
     "@fontsource-variable/dm-sans": "^5.3.0",
     "@fontsource-variable/sora": "^5.3.0",
     "lucide-react": "^1.73.0",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "read-excel-file": "^9.3.17"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.3.0",
