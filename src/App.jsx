@@ -177,6 +177,8 @@ export default function App() {
   const toastTimerRef = useRef(null)
   const mountedRef = useRef(true)
 
+  const overviewMode = doc.nodes.length > 24 && view.zoom < 0.56
+  const showEdgeLabels = doc.nodes.length <= 30 || view.zoom >= 0.82
   const selectedNode = selected?.type === 'node' ? doc.nodes.find((n) => n.id === selected.id) : null
   const selectedMessageNode = selectedNode && isMessageNode(selectedNode) ? selectedNode : null
   const selectedEdge = selected?.type === 'edge' ? doc.edges.find((e) => e.id === selected.id) : null
@@ -317,7 +319,12 @@ export default function App() {
     setSaveState('saving')
     const timer = setTimeout(() => { saveActiveFlow() }, 420)
     return () => clearTimeout(timer)
-  }, [doc, view, activeFlowId, saveActiveFlow])
+  }, [doc, activeFlowId, saveActiveFlow])
+
+  useEffect(() => {
+    const record = libraryRef.current.flows.find((flow) => flow.id === activeFlowId)
+    if (record) record.view = viewRef.current
+  }, [view, activeFlowId])
 
   useEffect(() => {
     const flush = () => {
@@ -1638,6 +1645,16 @@ export default function App() {
     patchBlock(node.id, block.id, { text: value }, `block-text:${block.id}`)
   }, [patchBlock])
 
+  const handleOpenNode = useCallback((node) => {
+    setSelected({ type: 'node', id: node.id })
+    setEditingBlock(null)
+  }, [])
+
+  const handleSelectEdge = useCallback((id) => {
+    setSelected({ type: 'edge', id })
+    setEditingBlock(null)
+  }, [])
+
   const handleNodeDoubleClick = useCallback((node) => {
     setSelected({ type: 'node', id: node.id })
     const blocks = node.blocks || []
@@ -1959,8 +1976,11 @@ export default function App() {
             edges={doc.edges}
             sizes={sizes}
             selectedEdgeId={selected?.type === 'edge' ? selected.id : null}
+            selectedNodeId={selectedNode?.id || null}
             connecting={connecting}
-            onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingBlock(null) }}
+            overview={overviewMode}
+            showLabels={showEdgeLabels}
+            onSelectEdge={handleSelectEdge}
           />
           {doc.nodes.map((node) => (
             <NodeCard
@@ -1971,10 +1991,11 @@ export default function App() {
               connecting={Boolean(connecting)}
               editingBlockId={editingBlock?.nodeId === node.id ? editingBlock.blockId : null}
               outEdges={outEdgesByNode[node.id] || []}
+              compact={overviewMode}
               onMeasure={handleMeasure}
               onPointerDown={handleNodePointerDown}
               onStartConnect={startConnect}
-              onOpen={(n) => { setSelected({ type: 'node', id: n.id }); setEditingBlock(null) }}
+              onOpen={handleOpenNode}
               onDoubleClick={handleNodeDoubleClick}
               onStartEditBlock={startEditingBlock}
               onBlockTextChange={handleBlockTextChange}
@@ -2030,7 +2051,7 @@ export default function App() {
         onSaveNow={saveNow}
       />
 
-      <div className="mobile-hint" aria-hidden="true">arraste para explorar · pinça para zoom</div>
+      <div className="mobile-hint" aria-hidden="true">{overviewMode ? 'visão geral · dê zoom para ler' : 'arraste para explorar · pinça para zoom'}</div>
 
       <ToolRail
         onAdd={addNode}
@@ -2051,9 +2072,15 @@ export default function App() {
       />
 
       <div className="canvas-hints hide-mobile">
-        <span><MousePointer2 size={12} /> arraste para mover</span>
-        <i />
-        <span><ZoomIn size={12} /> scroll para dar zoom</span>
+        {overviewMode ? (
+          <span><ZoomIn size={12} /> visão geral · dê zoom para ler as mensagens</span>
+        ) : (
+          <>
+            <span><MousePointer2 size={12} /> arraste para mover</span>
+            <i />
+            <span><ZoomIn size={12} /> scroll para dar zoom</span>
+          </>
+        )}
         <button type="button" onClick={() => setModal('help')} aria-label="Ver atalhos">?</button>
       </div>
 

@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { memo, useMemo } from 'react'
 import { getBezier, getConnectionPreview } from '../lib/geometry'
 
 const safeId = (value) => String(value).replace(/[^a-zA-Z0-9]/g, '')
 
-export default function EdgeLayer({
-  nodes, edges, sizes, selectedEdgeId, connecting, onSelectEdge,
+function EdgeLayer({
+  nodes, edges, sizes, selectedEdgeId, selectedNodeId, connecting, onSelectEdge, overview = false, showLabels = true,
 }) {
   const boxes = useMemo(() => {
     const map = {}
@@ -27,9 +27,11 @@ export default function EdgeLayer({
     ? getConnectionPreview(source, { x: connecting.x, y: connecting.y })
     : null
 
+  const heavy = nodes.length > 30
+  const renderLabels = Boolean(selectedEdgeId) || (!overview && (!heavy ? showLabels : Boolean(selectedNodeId)))
   return (
     <>
-      <svg className="edge-layer" width="12000" height="8000" aria-hidden="true">
+      <svg className={`edge-layer ${overview ? 'is-overview' : ''}`} width="12000" height="8000" aria-hidden="true">
         <defs>
           {colors.map((color) => (
             <marker
@@ -57,17 +59,18 @@ export default function EdgeLayer({
           if (!from || !to) return null
           const geo = getBezier(from, to)
           const selected = edge.id === selectedEdgeId
+          const related = Boolean(selectedNodeId && (edge.from === selectedNodeId || edge.to === selectedNodeId))
           return (
-            <g key={edge.id} className={`edge ${selected ? 'is-selected' : ''}`}>
-              <path className="edge-glow" d={geo.path} stroke={edge.color} />
+            <g key={edge.id} className={`edge ${selected ? 'is-selected' : ''} ${related ? 'is-related' : ''} ${edge.weak ? 'is-weak' : ''}`}>
+              {!overview && !heavy && <path className="edge-glow" d={geo.path} stroke={edge.color} />}
               <path
                 className="edge-path"
                 d={geo.path}
                 stroke={edge.color}
                 strokeDasharray={edge.dashed ? '7 7' : undefined}
-                markerEnd={`url(#arrow-${safeId(edge.color)})`}
+                markerEnd={overview || heavy ? undefined : `url(#arrow-${safeId(edge.color)})`}
               />
-              {edge.animated && (
+              {!overview && !heavy && edge.animated && (
                 <path
                   className="edge-flow"
                   d={geo.path}
@@ -95,13 +98,16 @@ export default function EdgeLayer({
         )}
       </svg>
 
-      <div className="edge-label-layer">
+      {renderLabels && <div className="edge-label-layer">
         {edges.map((edge) => {
           const from = boxes[edge.from]
           const to = boxes[edge.to]
           if (!from || !to) return null
           const geo = getBezier(from, to)
           const selected = edge.id === selectedEdgeId
+          const related = Boolean(selectedNodeId && (edge.from === selectedNodeId || edge.to === selectedNodeId))
+          const shouldShow = selected || (!overview && (!heavy ? showLabels : related))
+          if (!shouldShow) return null
           if (!edge.label && !selected) return null
           return (
             <button
@@ -117,7 +123,9 @@ export default function EdgeLayer({
             </button>
           )
         })}
-      </div>
+      </div>}
     </>
   )
 }
+
+export default memo(EdgeLayer)

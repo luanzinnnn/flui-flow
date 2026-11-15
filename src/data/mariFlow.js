@@ -1,6 +1,3 @@
-// Rascunho gerado a partir de "Prompt-Flui-Mari-Suporte-30-Dias.txt".
-// Os caminhos foram preservados como nós internos; variações e ramificações
-// que não viram ligação direta ficam na nota interna de cada balão.
 export const MARI_SUPPORT_TEMPLATE = {
   "id": "mari-suporte-30d",
   "name": "Suporte Mari Trader — 30 dias",
@@ -784,7 +781,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[triagem] Pedido genérico de ajuda",
       "color": "#a3e635",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-8",
@@ -793,7 +791,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[atraso] Aguardando resposta ou volta do suporte",
       "color": "#a3e635",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-9",
@@ -802,7 +801,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[parar] Pessoa não quer continuar ou pede para sair",
       "color": "#a3e635",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-10",
@@ -811,7 +811,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[atualizar] Pegar o indicador atualizado",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-11",
@@ -820,7 +821,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[versao] Indicador diferente da live",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-12",
@@ -829,7 +831,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[instalar] Baixar e instalar o script",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-13",
@@ -838,7 +841,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[celular] Indicador no celular",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-14",
@@ -847,7 +851,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[corretora] Compatibilidade com outra corretora",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-15",
@@ -856,7 +861,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[otc] Ativo OTC ausente ou gráfico diferente",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-16",
@@ -865,7 +871,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[resultados] Perdas e dúvidas sobre resultados",
       "color": "#fbbf24",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-17",
@@ -874,7 +881,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[cadastro] Cadastro, login e link da Avalon",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-18",
@@ -883,7 +891,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[id] Encontrar o ID da Avalon",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-19",
@@ -892,7 +901,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[conta-antiga] Conta antiga e elegibilidade",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-20",
@@ -901,7 +911,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[verificacao] Documentos e verificação da conta",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-21",
@@ -910,7 +921,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[demo] Conta demo e conta real",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-22",
@@ -919,7 +931,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[suspensa] Conta suspensa ou restrita",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-23",
@@ -928,7 +941,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[credenciais] Pedido de senha ou código",
       "color": "#a78bfa",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-24",
@@ -937,7 +951,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[live] Horários, comunidade e link da live",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-25",
@@ -946,7 +961,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[live-erro] Live ou Meet não abre",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-26",
@@ -955,7 +971,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[grupo-erro] Grupo ou link do Telegram não abre",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-27",
@@ -964,7 +981,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[sinais] Horário dos sinais, tempo do gráfico e expiração",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-28",
@@ -973,7 +991,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[aprender] Aulas para começar e acompanhar operações",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-29",
@@ -982,7 +1001,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[planilha] Planilha e gerenciamento de banca",
       "color": "#22d3ee",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-30",
@@ -991,7 +1011,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[planos] Preço e acesso básico ou completo",
       "color": "#fb7185",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-31",
@@ -1000,7 +1021,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[particular] Aula particular ou mini curso mencionado a…",
       "color": "#fb7185",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-32",
@@ -1009,7 +1031,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[curso] Acesso ao curso ou à compra",
       "color": "#fb7185",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-33",
@@ -1018,7 +1041,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[painel] Cinco Estratégias e acesso ao Visor Trader",
       "color": "#fb7185",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-34",
@@ -1027,7 +1051,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[estorno] Estorno da compra do indicador",
       "color": "#fb7185",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-35",
@@ -1036,7 +1061,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[bonus] Bônus após comprar o indicador",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-36",
@@ -1045,7 +1071,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[deposito] Depósito mínimo ou depósito pendente",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-37",
@@ -1054,7 +1081,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[cupom] Cupom de depósito e código inválido",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-38",
@@ -1063,7 +1091,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[cupom-pos] Depósito concluído sem cupom",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-39",
@@ -1072,7 +1101,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[bonus-saldo] Bônus de depósito não entrou ou sumiu",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-40",
@@ -1081,7 +1111,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[pix] Pix promocional ou devolução anunciada",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-41",
@@ -1090,7 +1121,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[rollover] Rollover e regras do bônus",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-42",
@@ -1099,7 +1131,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[saque] Saque bloqueado ou pendente",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-43",
@@ -1108,7 +1141,8 @@ export const MARI_SUPPORT_TEMPLATE = {
       "label": "[alavancagem] Alavancagem ou dobra de banca",
       "color": "#fb923c",
       "animated": true,
-      "dashed": false
+      "dashed": false,
+      "weak": true
     },
     {
       "id": "mari-edge-44",

@@ -43,7 +43,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><MousePointer2 size={17} /></span>
             <h3>Mova sem medo</h3>
-            <p>Arraste qualquer espaço vazio para navegar. Use o scroll para dar zoom e a barra de espaço para mover com precisão.</p>
+            <p>Arraste qualquer espaço vazio para navegar. Use o scroll para dar zoom e a barra de espaço para mover com precisão. Em fluxos grandes, afaste o zoom para ver o mapa compacto e aproxime para ler as mensagens. Selecione um balão para destacar as ligações e ver os destinos no painel.</p>
           </div>
           <div className="help-card">
             <span className="help-card-icon"><ArrowRight size={17} /></span>

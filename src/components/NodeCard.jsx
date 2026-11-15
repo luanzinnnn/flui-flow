@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { memo, useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight, AudioLines, Clock3, Film, GitBranch, GripVertical, Image as ImageIcon,
   ImagePlus, Layers, Mic, Play, Plus, SlidersHorizontal, StickyNote, Type, Video,
@@ -156,8 +156,8 @@ function MediaBlockView({ node, block, onPickBlockMedia }) {
   return null
 }
 
-export default function NodeCard({
-  node, selected, isTarget, connecting, editingBlockId, outEdges,
+function NodeCard({
+  node, selected, isTarget, connecting, editingBlockId, outEdges, compact,
   onMeasure, onPointerDown, onStartConnect, onOpen, onDoubleClick,
   onStartEditBlock, onBlockTextChange, onEndEditBlock, onPickBlockMedia,
   onDropAsset, onDropFiles,
@@ -166,6 +166,7 @@ export default function NodeCard({
   const dragDepth = useRef(0)
   const [dragOver, setDragOver] = useState(false)
   const start = node.type === 'start'
+  const compactView = Boolean(compact && !start)
   const message = isMessageNode(node)
   const blocks = Array.isArray(node.blocks) ? node.blocks : []
   const kinds = getBlockKinds(node)
@@ -247,9 +248,11 @@ export default function NodeCard({
     dragOver ? 'is-drop-target' : '',
     node.type === 'condition' ? 'node-condition' : '',
     node.type === 'delay' ? 'node-delay' : '',
+    compactView ? 'is-compact' : '',
   ].filter(Boolean).join(' ')
 
   const handleDoubleClick = (e) => {
+    if (compactView) return
     if (e.target.closest('button, textarea, video, input')) return
     onDoubleClick(node)
   }
@@ -279,6 +282,21 @@ export default function NodeCard({
             <small>gatilho do fluxo</small>
           </span>
           <span className="start-live" />
+        </div>
+      ) : compactView ? (
+        <div className="node-compact-body">
+          <div className="node-compact-head">
+            <span className="node-type-icon" style={{ color: node.accent, background: `${node.accent}18`, borderColor: `${node.accent}35` }}>
+              <Icon size={12} />
+            </span>
+            <span className="node-kind">{headerLabel}</span>
+            {node.note?.trim() && <span className="node-compact-note" title="Nota interna"><StickyNote size={10} /></span>}
+            {outEdges.length > 0 && <span className="node-compact-out">{outEdges.length}</span>}
+          </div>
+          <h3 className="node-compact-title">
+            {node.title?.trim() || (node.type === 'condition' ? 'Nova condição' : node.type === 'delay' ? 'Nova espera' : (blocks.find((b) => b.kind === 'text')?.text?.slice(0, 70) || 'Balão'))}
+          </h3>
+          {node.type === 'condition' && node.text && <p className="node-compact-text">{node.text}</p>}
         </div>
       ) : (
         <>
@@ -425,3 +443,5 @@ export default function NodeCard({
     </div>
   )
 }
+
+export default memo(NodeCard)
