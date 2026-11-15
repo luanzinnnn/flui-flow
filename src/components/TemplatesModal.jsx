@@ -150,8 +150,8 @@ export default function TemplatesModal({ onClose, onApply, onBlank, currentTempl
           </button>
         </div>
         <footer className="modal-foot">
-          <span><Sparkles size={13} /> Aplicar um modelo substitui o fluxo atual.</span>
-          <span>Você pode desfazer com <kbd>⌘</kbd><kbd>Z</kbd>.</span>
+          <span><Sparkles size={13} /> Aplicar um modelo cria um novo fluxo salvo; o atual fica em Fluxos.</span>
+          <span>O fluxo anterior continua salvo em Fluxos.</span>
         </footer>
       </div>
     </div>

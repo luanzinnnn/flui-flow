@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { ArrowRight, Command, FolderOpen, Keyboard, Layers, Lock, MousePointer2, Sparkles, Wand2, X } from 'lucide-react'
+import { ArrowRight, Command, FolderOpen, Keyboard, Layers, Lock, MousePointer2, Save, Sparkles, Wand2, X } from 'lucide-react'
 
 const SHORTCUTS = [
   ['Arrastar a tela', ['espaço', '+', 'arrastar']],
@@ -12,6 +12,8 @@ const SHORTCUTS = [
   ['Duplicar', ['⌘', 'D']],
   ['Biblioteca', ['M']],
   ['Copiloto', ['K']],
+  ['Fluxos', ['F']],
+  ['Salvar', ['⌘', 'S']],
   ['Enquadrar', ['0']],
   ['Fechar', ['esc']],
   ['Ajuda', ['?']],
@@ -74,9 +76,9 @@ export default function HelpModal({ onClose }) {
             <p>A chave da DeepSeek fica só na memória desta aba e é enviada direto para a API oficial. O fluxo é enviado apenas quando você pede uma resposta.</p>
           </div>
           <div className="help-card">
-            <span className="help-card-icon"><Command size={17} /></span>
-            <h3>Salvamento automático</h3>
-            <p>Cada edição fica salva neste navegador. Exporte um JSON quando quiser levar o fluxo para outro lugar.</p>
+            <span className="help-card-icon"><Save size={17} /></span>
+            <h3>Vários fluxos salvos</h3>
+            <p>Abra <strong>Fluxos</strong> (F) para criar vários fluxos, voltar aos anteriores, duplicar ou renomear. Tudo salva automático neste navegador; o botão “salvo” também salva na hora.</p>
           </div>
         </div>
 

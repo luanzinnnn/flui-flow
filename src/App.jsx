@@ -13,6 +13,7 @@ import HelpModal from './components/HelpModal.jsx'
 import PreviewModal from './components/PreviewModal.jsx'
 import MediaShelf from './components/MediaShelf.jsx'
 import AssistantPanel from './components/AssistantPanel.jsx'
+import FlowLibraryModal from './components/FlowLibraryModal.jsx'
 import Toast from './components/Toast.jsx'
 import {
   createBlankDoc, createDocFromTemplate, EDGE_COLORS, ESTIMATED_HEIGHT,
@@ -20,7 +21,10 @@ import {
 } from './data/flowData.js'
 import { clamp, getBezier, getFlowBounds, pointInNode } from './lib/geometry.js'
 import { useFlowHistory } from './lib/useFlowHistory.js'
-import { downloadJSON, loadDoc, loadView, saveDoc, saveView } from './lib/storage.js'
+import { downloadJSON, loadDoc, loadView } from './lib/storage.js'
+import {
+  loadFlowLibrary, makeFlowRecord, saveFlowLibrary, summarizeFlow, uniqueFlowTitle,
+} from './lib/flowStore.js'
 import { putMedia } from './lib/mediaStore.js'
 import {
   assetToBlock, blockHasMedia, findEmptyMediaBlock, isMessageNode, isTextFile,
@@ -35,6 +39,13 @@ const DEFAULT_VIEW = () => {
   if (width >= 900) return { x: 8, y: 150, zoom: 0.6 }
   return { x: 8, y: 170, zoom: 0.5 }
 }
+
+const isValidView = (view) => Boolean(
+  view
+  && Number.isFinite(view.x)
+  && Number.isFinite(view.y)
+  && Number.isFinite(view.zoom)
+)
 
 const isTextInput = (target) => {
   if (!target) return false
@@ -83,12 +94,33 @@ function edgeLabelFor(source, outCount) {
 }
 
 export default function App() {
-  const initialDoc = useMemo(() => normalizeDoc(loadDoc() || createDocFromTemplate(TEMPLATES[0])), [])
-  const initialView = useMemo(() => loadView() || DEFAULT_VIEW(), [])
-  const { doc, docRef, apply, pushSnapshot, undo, redo, canUndo, canRedo } = useFlowHistory(initialDoc)
+  const boot = useMemo(() => {
+    const saved = loadFlowLibrary()
+    if (saved?.flows?.length) {
+      const active = saved.flows.find((flow) => flow.id === saved.activeId) || saved.flows[0]
+      const nextDoc = normalizeDoc(active.doc)
+      const nextView = isValidView(active.view) ? active.view : DEFAULT_VIEW()
+      active.doc = nextDoc
+      active.view = nextView
+      saved.activeId = active.id
+      saveFlowLibrary(saved)
+      return { library: saved, doc: nextDoc, view: nextView, activeId: active.id }
+    }
+    const nextDoc = normalizeDoc(loadDoc() || createDocFromTemplate(TEMPLATES[0]))
+    const legacyView = loadView()
+    const nextView = isValidView(legacyView) ? legacyView : DEFAULT_VIEW()
+    const record = makeFlowRecord({ doc: nextDoc, view: nextView })
+    const library = { version: 1, activeId: record.id, flows: [record] }
+    saveFlowLibrary(library)
+    return { library, doc: nextDoc, view: nextView, activeId: record.id }
+  }, [])
 
-  const [view, setViewState] = useState(initialView)
-  const viewRef = useRef(initialView)
+  const {
+    doc, docRef, apply, pushSnapshot, undo, redo, replaceDoc, canUndo, canRedo,
+  } = useFlowHistory(boot.doc)
+
+  const [view, setViewState] = useState(boot.view)
+  const viewRef = useRef(boot.view)
   const [sizes, setSizes] = useState({})
   const sizesRef = useRef({})
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight })
@@ -105,6 +137,9 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [saveState, setSaveState] = useState('saved')
   const [fitting, setFitting] = useState(false)
+  const [activeFlowId, setActiveFlowId] = useState(boot.activeId)
+  const [flowList, setFlowList] = useState(() => boot.library.flows.map(summarizeFlow))
+  const libraryRef = useRef(boot.library)
 
   const canvasRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -233,35 +268,98 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), [])
 
+  const refreshFlowList = useCallback(() => {
+    setFlowList(libraryRef.current.flows.map(summarizeFlow))
+  }, [])
+
+  const saveActiveFlow = useCallback(({ touch = true, silent = false } = {}) => {
+    const library = libraryRef.current
+    const record = library.flows.find((flow) => flow.id === activeFlowId)
+    if (!record) return false
+    record.doc = docRef.current
+    record.view = viewRef.current
+    if (touch) record.updatedAt = Date.now()
+    library.activeId = activeFlowId
+    const ok = saveFlowLibrary(library)
+    refreshFlowList()
+    if (!silent) setSaveState(ok ? 'saved' : 'error')
+    return ok
+  }, [activeFlowId, docRef, refreshFlowList])
+
   useEffect(() => {
+    if (!activeFlowId) return undefined
     setSaveState('saving')
-    const timer = setTimeout(() => {
-      const ok = saveDoc(doc)
-      setSaveState(ok ? 'saved' : 'error')
-    }, 380)
+    const timer = setTimeout(() => { saveActiveFlow() }, 420)
     return () => clearTimeout(timer)
-  }, [doc])
+  }, [doc, view, activeFlowId, saveActiveFlow])
 
   useEffect(() => {
-    const timer = setTimeout(() => saveView(view), 260)
-    return () => clearTimeout(timer)
-  }, [view])
-
-  useEffect(() => {
-    const onBeforeUnload = () => {
-      saveDoc(docRef.current)
-      saveView(viewRef.current)
+    const flush = () => {
+      const library = libraryRef.current
+      const record = library.flows.find((flow) => flow.id === activeFlowId)
+      if (!record) return
+      record.doc = docRef.current
+      record.view = viewRef.current
+      record.updatedAt = Date.now()
+      library.activeId = activeFlowId
+      saveFlowLibrary(library)
     }
-    window.addEventListener('beforeunload', onBeforeUnload)
+    window.addEventListener('beforeunload', flush)
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') onBeforeUnload()
+      if (document.visibilityState === 'hidden') flush()
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
-      window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('beforeunload', flush)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [docRef])
+  }, [activeFlowId, docRef])
+
+  const saveNow = useCallback(() => {
+    const ok = saveActiveFlow()
+    notify(ok ? 'Fluxo salvo agora.' : 'Não consegui salvar. Confira o armazenamento do navegador.', {
+      tone: ok ? 'success' : 'error',
+    })
+    return ok
+  }, [notify, saveActiveFlow])
+
+  const loadRecord = useCallback((record) => {
+    const nextDoc = normalizeDoc(record.doc)
+    const nextView = isValidView(record.view) ? record.view : DEFAULT_VIEW()
+    record.doc = nextDoc
+    record.view = nextView
+    setActiveFlowId(record.id)
+    replaceDoc(nextDoc)
+    commitView(nextView)
+    setSelected(null)
+    setEditingBlock(null)
+    setLibraryOpen(false)
+    setAssistantOpen(false)
+    setConnecting(null)
+    setDraggingId(null)
+    setFileDragActive(false)
+    setSizes({})
+    setFitting(false)
+    setModal(null)
+    setSaveState('saved')
+  }, [commitView, replaceDoc])
+
+  const addFlowAndOpen = useCallback((nextDoc, options = {}) => {
+    const sourceDoc = normalizeDoc(nextDoc)
+    saveActiveFlow({ silent: true })
+    const library = libraryRef.current
+    const record = makeFlowRecord({ doc: sourceDoc, view: options.view || DEFAULT_VIEW() })
+    library.flows.push(record)
+    library.activeId = record.id
+    const ok = saveFlowLibrary(library)
+    setFlowList(library.flows.map(summarizeFlow))
+    loadRecord(record)
+    setSaveState(ok ? 'saved' : 'error')
+    if (options.fit) setFitting(true)
+    if (options.message) notify(options.message, { tone: ok ? 'success' : 'error' })
+    return record
+  }, [loadRecord, notify, saveActiveFlow])
+
 
   const handleMeasure = useCallback((id, w, h) => {
     setSizes((prev) => {
@@ -1108,18 +1206,14 @@ export default function App() {
           library: Array.isArray(parsed.library) ? parsed.library : [],
         })
         imported.library = mergeLibraries(docRef.current.library, imported.library)
-        apply(() => imported)
-        setSelected(null)
-        setEditingBlock(null)
-        setLibraryOpen(false)
-        setFitting(true)
-        notify('Fluxo importado. Bem-vindo de volta!')
+        imported.title = uniqueFlowTitle(imported.title, libraryRef.current.flows)
+        addFlowAndOpen(imported, { fit: true, message: `Fluxo “${imported.title}” importado.` })
       } catch {
         notify('Esse arquivo não parece um fluxo do flui. Confira o JSON e tente de novo.', { tone: 'error' })
       }
     }
     reader.readAsText(file)
-  }, [apply, docRef, notify])
+  }, [addFlowAndOpen, docRef, notify])
 
   const handleExport = useCallback(() => {
     const payload = { ...docRef.current, exportedAt: new Date().toISOString(), app: 'flui' }
@@ -1127,17 +1221,16 @@ export default function App() {
     notify('Fluxo exportado em JSON.')
   }, [docRef, notify])
 
-  const applyTemplate = useCallback((template) => {
+  const createFlowFromTemplate = useCallback((template) => {
     const next = normalizeDoc(createDocFromTemplate(template))
     next.library = mergeLibraries(docRef.current.library, next.library)
-    apply(() => next)
-    setSelected(null)
-    setEditingBlock(null)
-    setModal(null)
-    setLibraryOpen(false)
-    setFitting(true)
-    notify(template ? `Modelo “${template.short}” aplicado.` : 'Um novo fluxo, em branco.')
-  }, [apply, docRef, notify])
+    const baseTitle = template ? next.title : 'Novo fluxo'
+    next.title = uniqueFlowTitle(baseTitle, libraryRef.current.flows)
+    addFlowAndOpen(next, {
+      fit: true,
+      message: template ? `Novo fluxo a partir de “${template.short}”.` : 'Novo fluxo em branco.',
+    })
+  }, [addFlowAndOpen, docRef])
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -1148,16 +1241,113 @@ export default function App() {
     }
   }, [notify])
 
-  const handleClear = useCallback(() => {
-    const next = normalizeDoc(createBlankDoc())
-    next.library = mergeLibraries(docRef.current.library, next.library)
-    apply(() => next)
-    setSelected(null)
+  const createNewFlow = useCallback(() => {
+    createFlowFromTemplate(null)
+  }, [createFlowFromTemplate])
+
+
+  const openFlowLibrary = useCallback(() => {
+    if (modal === 'flows') {
+      setModal(null)
+      return
+    }
+    saveActiveFlow({ silent: true })
     setEditingBlock(null)
     setLibraryOpen(false)
-    setFitting(true)
-    notify('Tela limpa. Agora é sua.', { actionLabel: 'Desfazer', onAction: undo })
-  }, [apply, docRef, notify, undo])
+    setAssistantOpen(false)
+    setModal('flows')
+  }, [modal, saveActiveFlow])
+
+  const openSavedFlow = useCallback((id) => {
+    if (id === activeFlowId) {
+      setModal(null)
+      return
+    }
+    saveActiveFlow({ silent: true })
+    const library = libraryRef.current
+    const record = library.flows.find((flow) => flow.id === id)
+    if (!record) return
+    const nextDoc = normalizeDoc(record.doc)
+    const nextView = isValidView(record.view) ? record.view : DEFAULT_VIEW()
+    record.doc = nextDoc
+    record.view = nextView
+    library.activeId = id
+    saveFlowLibrary(library)
+    refreshFlowList()
+    loadRecord(record)
+    notify(`Fluxo “${nextDoc.title?.trim() || 'sem título'}” aberto.`)
+  }, [activeFlowId, loadRecord, notify, refreshFlowList, saveActiveFlow])
+
+  const duplicateFlow = useCallback((id) => {
+    saveActiveFlow({ silent: true })
+    const library = libraryRef.current
+    const source = library.flows.find((flow) => flow.id === id)
+    if (!source) return
+    const copy = normalizeDoc(structuredClone(source.doc))
+    copy.title = uniqueFlowTitle(`${source.doc?.title?.trim() || 'Fluxo'} · cópia`, library.flows)
+    addFlowAndOpen(copy, {
+      view: source.view,
+      message: `Cópia criada: “${copy.title}”.`,
+    })
+  }, [addFlowAndOpen, saveActiveFlow])
+
+  const renameFlow = useCallback((id, value) => {
+    const title = String(value || '').trim() || 'Fluxo sem título'
+    const library = libraryRef.current
+    const record = library.flows.find((flow) => flow.id === id)
+    if (!record) return
+    if (id === activeFlowId) {
+      const nextDoc = { ...docRef.current, title }
+      apply(() => nextDoc)
+      record.doc = nextDoc
+    } else {
+      record.doc = { ...record.doc, title }
+    }
+    record.updatedAt = Date.now()
+    library.activeId = activeFlowId
+    saveFlowLibrary(library)
+    refreshFlowList()
+    setSaveState('saved')
+    notify(`Fluxo renomeado para “${title}”.`)
+  }, [activeFlowId, apply, docRef, notify, refreshFlowList])
+
+  const deleteFlow = useCallback((id) => {
+    saveActiveFlow({ silent: true })
+    const library = libraryRef.current
+    const index = library.flows.findIndex((flow) => flow.id === id)
+    if (index < 0) return
+    const removed = library.flows[index]
+    const wasActive = id === activeFlowId
+    library.flows.splice(index, 1)
+
+    if (!library.flows.length) {
+      const blank = normalizeDoc(createBlankDoc())
+      blank.title = 'Novo fluxo'
+      const record = makeFlowRecord({ doc: blank, view: DEFAULT_VIEW() })
+      library.flows = [record]
+      library.activeId = record.id
+      const ok = saveFlowLibrary(library)
+      setFlowList(library.flows.map(summarizeFlow))
+      loadRecord(record)
+      notify(ok ? 'Fluxo excluído. Comecei um novo em branco.' : 'Fluxo excluído, mas não consegui criar o próximo.', { tone: ok ? 'success' : 'error' })
+      return
+    }
+
+    if (wasActive) {
+      const next = [...library.flows].sort((a, b) => b.updatedAt - a.updatedAt)[0]
+      library.activeId = next.id
+      saveFlowLibrary(library)
+      refreshFlowList()
+      loadRecord(next)
+      notify(`Fluxo “${removed.doc?.title || 'sem título'}” excluído.`)
+      return
+    }
+
+    library.activeId = activeFlowId
+    saveFlowLibrary(library)
+    refreshFlowList()
+    notify(`Fluxo “${removed.doc?.title || 'sem título'}” excluído.`)
+  }, [activeFlowId, loadRecord, notify, refreshFlowList, saveActiveFlow])
 
   const handleTitleChange = useCallback((value) => {
     apply((prev) => ({ ...prev, title: value }), { key: 'doc-title' })
@@ -1383,6 +1573,11 @@ export default function App() {
         if (selected) setSelected(null)
         return
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        saveNow()
+        return
+      }
       if (modal) return
       if (e.code === 'Space' && !typing) {
         e.preventDefault()
@@ -1411,6 +1606,11 @@ export default function App() {
         })
         return
       }
+      if (!meta && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        openFlowLibrary()
+        return
+      }
       if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -1420,11 +1620,6 @@ export default function App() {
       if (meta && e.key.toLowerCase() === 'd') {
         e.preventDefault()
         duplicateSelection()
-        return
-      }
-      if (meta && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        handleExport()
         return
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -1471,7 +1666,7 @@ export default function App() {
     }
   }, [
     modal, connecting, editingBlock, selected, cancelConnecting, redo, undo, libraryOpen, assistantOpen,
-    duplicateSelection, handleExport, removeSelection, zoomCenter, fitView, setZoom100,
+    duplicateSelection, removeSelection, zoomCenter, fitView, setZoom100, openFlowLibrary, saveNow,
   ])
 
   const edgeQuickPosition = useMemo(() => {
@@ -1596,12 +1791,15 @@ export default function App() {
         onImport={() => importInputRef.current?.click()}
         onCopyLink={handleCopyLink}
         onHelp={() => setModal('help')}
-        onClear={handleClear}
+        onNewFlow={createNewFlow}
         onLibrary={toggleLibrary}
         libraryOpen={libraryOpen}
         assetCount={(doc.library || []).length}
         onAssistant={toggleAssistant}
         assistantOpen={assistantOpen}
+        onOpenFlows={openFlowLibrary}
+        flowCount={flowList.length}
+        onSaveNow={saveNow}
       />
 
       <div className="mobile-hint" aria-hidden="true">arraste para explorar · pinça para zoom</div>
@@ -1652,6 +1850,7 @@ export default function App() {
       )}
 
       <AssistantPanel
+        key={activeFlowId}
         open={assistantOpen}
         onClose={() => setAssistantOpen(false)}
         doc={doc}
@@ -1697,9 +1896,23 @@ export default function App() {
       {modal === 'templates' && (
         <TemplatesModal
           onClose={() => setModal(null)}
-          onApply={applyTemplate}
-          onBlank={() => applyTemplate(null)}
+          onApply={createFlowFromTemplate}
+          onBlank={createNewFlow}
           currentTemplateId={doc.templateId}
+        />
+      )}
+      {modal === 'flows' && (
+        <FlowLibraryModal
+          flows={flowList}
+          activeId={activeFlowId}
+          saveState={saveState}
+          onClose={() => setModal(null)}
+          onOpenFlow={openSavedFlow}
+          onCreateFlow={createNewFlow}
+          onDuplicateFlow={duplicateFlow}
+          onDeleteFlow={deleteFlow}
+          onRenameFlow={renameFlow}
+          onSaveNow={saveNow}
         />
       )}
       {modal === 'help' && <HelpModal onClose={() => setModal(null)} />}

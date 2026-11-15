@@ -63,6 +63,16 @@ export function useFlowHistory(initialDoc) {
     bump()
   }, [bump])
 
+  const replaceDoc = useCallback((nextDoc) => {
+    if (!nextDoc) return
+    pastRef.current = []
+    futureRef.current = []
+    lastKeyRef.current = { key: null, at: 0 }
+    docRef.current = nextDoc
+    setDocState(nextDoc)
+    bump()
+  }, [bump])
+
   return {
     doc,
     docRef,
@@ -70,6 +80,7 @@ export function useFlowHistory(initialDoc) {
     pushSnapshot,
     undo,
     redo,
+    replaceDoc,
     canUndo: pastRef.current.length > 0,
     canRedo: futureRef.current.length > 0,
   }

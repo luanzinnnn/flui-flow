@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  Download, FolderOpen, HelpCircle, LayoutGrid, Link2, MoreHorizontal, Play,
-  Redo2, RotateCcw, Sparkles, Undo2, Upload,
+  Download, FolderOpen, HelpCircle, Layers, LayoutGrid, Link2, MoreHorizontal, Play,
+  Plus, Redo2, Save, Sparkles, Undo2, Upload,
 } from 'lucide-react'
 import Logo from './Logo'
 
 export default function TopBar({
   title, onTitleChange, saveState, onUndo, onRedo, canUndo, canRedo,
-  onTemplates, onTest, onExport, onImport, onCopyLink, onHelp, onClear,
+  onTemplates, onTest, onExport, onImport, onCopyLink, onHelp, onNewFlow,
   onLibrary, libraryOpen, assetCount, onAssistant, assistantOpen,
+  onOpenFlows, flowCount, onSaveNow,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -47,6 +48,18 @@ export default function TopBar({
           <span className="wordmark">flui<span>.</span></span>
           <span className="beta-pill">beta</span>
         </div>
+        <button
+          type="button"
+          className="flows-trigger"
+          onClick={onOpenFlows}
+          title={`Fluxos salvos (F) · ${flowCount} ${flowCount === 1 ? 'fluxo' : 'fluxos'}`}
+          aria-label={`Abrir fluxos salvos (${flowCount})`}
+        >
+          <Layers size={14} />
+          <span className="flows-label">Fluxos</span>
+          <span className="flows-mobile-title">{title?.trim() || 'Fluxo'}</span>
+          <b className="flows-count">{flowCount}</b>
+        </button>
         <span className="topbar-divider" />
         <div className="doc-block">
           <input
@@ -56,10 +69,10 @@ export default function TopBar({
             aria-label="Nome do fluxo"
             spellCheck="false"
           />
-          <span className={`save-state ${saveState}`}>
+          <button type="button" className={`save-state ${saveState}`} onClick={onSaveNow} title="Salvar agora" aria-label="Salvar fluxo agora">
             <span className="save-dot" />
             {saveState === 'saving' ? 'salvando…' : saveState === 'error' ? 'não salvou' : 'salvo'}
-          </span>
+          </button>
         </div>
       </div>
 
@@ -111,15 +124,17 @@ export default function TopBar({
           {menuOpen && (
             <div className="dropdown-menu">
               <div className="menu-heading">Fluxo</div>
+              {item(<Layers size={15} />, 'Fluxos salvos', onOpenFlows, 'F')}
+              {item(<Save size={15} />, 'Salvar agora', onSaveNow, '⌘S')}
               {item(<LayoutGrid size={15} />, 'Modelos de fluxo', onTemplates)}
               {item(<FolderOpen size={15} />, 'Biblioteca de mídias', onLibrary, 'M')}
               {item(<Sparkles size={15} />, 'Copiloto DeepSeek', onAssistant, 'K')}
-              {item(<Download size={15} />, 'Exportar JSON', onExport)}
-              {item(<Upload size={15} />, 'Importar JSON', onImport)}
+              {item(<Download size={15} />, 'Exportar fluxo atual', onExport)}
+              {item(<Upload size={15} />, 'Importar como novo fluxo', onImport)}
               {item(<Link2 size={15} />, 'Copiar link do estúdio', onCopyLink)}
               <div className="menu-sep" />
               {item(<HelpCircle size={15} />, 'Atalhos e dicas', onHelp, '?')}
-              {item(<RotateCcw size={15} />, 'Começar do zero', onClear)}
+              {item(<Plus size={15} />, 'Novo fluxo', onNewFlow)}
               <div className="menu-foot">
                 <Sparkles size={12} />
                 feito para fluxos que fluem

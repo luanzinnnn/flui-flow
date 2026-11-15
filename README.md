@@ -8,6 +8,7 @@
 
 ## O que dá para fazer
 
+- **Vários fluxos salvos** — cada fluxo funciona como um arquivo separado, com nome, conteúdo e viewport próprios. Abra **Fluxos** (`F`) para criar um novo, voltar a qualquer anterior, duplicar, renomear ou excluir. O salvamento é automático, mas você também pode salvar na hora clicando em **salvo** ou com `⌘S` / `Ctrl+S`.
 - **Canvas livre** — arraste o fundo para navegar, role para dar zoom, use `espaço + arrastar` para mover com precisão. Tudo é salvo automaticamente no navegador.
 - **Balões de mensagem** — texto, áudio, foto, vídeo, condição e espera. Adicione pela barra lateral, pelo duplo clique no canvas ou soltando uma conexão no vazio.
 - **Conteúdo em camadas** — um mesmo balão pode misturar texto, áudio, foto e vídeo. No painel da direita, use as setas para organizar a ordem dos blocos. O áudio não exige descrição.
@@ -18,8 +19,8 @@
 - **Mídia de verdade** — envie imagens, vídeos e áudios (ou grave um áudio direto do microfone). Os arquivos ficam no IndexedDB do navegador.
 - **Copiloto DeepSeek** — um chat com contexto do fluxo inteiro (balões, mensagens, caminhos e foco atual) para perguntar o que responder, revisar mensagens e destravar caminhos. Ele não finge analisar áudios/fotos/vídeos; trabalha com os textos, tipos e nomes de arquivo. Abra com `K`, conecte sua chave DeepSeek e use uma das skills rápidas.
 - **Prévia interativa** — percorra o fluxo dentro de um celular, com o conteúdo composto de cada balão. Caminhos com uma única saída seguem sozinhos; onde há uma condição, você escolhe a resposta.
-- **Galeria de modelos** — três fluxos prontos para editar (boas-vindas, recuperação de carrinho e qualificação de lead), além de uma folha em branco. A biblioteca de mídias vem com exemplos prontos.
-- **Atalhos** — desfazer/refazer, duplicar, excluir, enquadrar, zoom de 100%, biblioteca (`M`) e mais. Pressione `?` ou abra o menu `···` → “Atalhos e dicas”.
+- **Galeria de modelos** — três fluxos prontos para editar (boas-vindas, recuperação de carrinho e qualificação de lead), além de uma folha em branco. Aplicar um modelo cria um novo fluxo salvo, sem sobrescrever o atual. A biblioteca de mídias vem com exemplos prontos.
+- **Atalhos** — desfazer/refazer, duplicar, excluir, enquadrar, zoom de 100%, biblioteca (`M`), fluxos (`F`), salvar (`⌘S`) e mais. Pressione `?` ou abra o menu `···` → “Atalhos e dicas”.
 
 ## Rodando localmente
 
@@ -41,7 +42,7 @@ npm run serve       # pré-visualiza o build em http://localhost:4173
 
 - React 19 + Vite
 - SVG para as ligações e HTML/CSS para o canvas
-- IndexedDB para mídias enviadas, `localStorage` para o fluxo e o viewport
+- IndexedDB para mídias enviadas, `localStorage` para a biblioteca de fluxos, o fluxo ativo e os viewports
 - Zero backend — tudo acontece no navegador
 
 ## Estrutura
@@ -58,10 +59,10 @@ docs/                     build publicado no GitHub Pages
 
 ## Notas
 
-- O link **Exportar JSON** salva a estrutura do fluxo, os blocos e a biblioteca. Arquivos enviados pelo usuário ficam no IndexedDB local e não são embutidos no JSON.
+- O link **Exportar fluxo atual** salva a estrutura do fluxo, os blocos e a biblioteca. Arquivos enviados pelo usuário ficam no IndexedDB local e não são embutidos no JSON. **Importar como novo fluxo** cria um fluxo separado, preservando o atual.
 - A gravação de áudio e o microfone exigem `https://` ou `localhost`.
 - O Copiloto usa a API oficial da DeepSeek direto do navegador. É necessário colar uma chave em [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys); ela fica apenas no `sessionStorage` desta aba e não é enviada para nenhum servidor do flui. O fluxo é enviado à DeepSeek somente quando você pede uma resposta.
-- Os fluxos são salvos no navegador. Para usar em outro computador, exporte/importe o JSON e envie novamente as mídias locais.
+- Cada fluxo é salvo no `localStorage` deste navegador, com seu próprio viewport. Para usar em outro computador, exporte/importe cada JSON e envie novamente as mídias locais. Limpar os dados do site apaga os fluxos e as mídias enviadas.
 - As imagens de demonstração vêm do Unsplash. O áudio dos modelos é sintetizado localmente.
 
 Feito para fluxos que fluem. ✦
