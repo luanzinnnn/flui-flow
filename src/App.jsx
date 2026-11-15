@@ -95,22 +95,39 @@ function edgeLabelFor(source, outCount) {
 
 const MARI_SEED_KEY = 'flui:mari-support-seeded:v1'
 
-function ensureSupportFlow(library) {
+function prepareSupportFlow(library) {
   try {
-    if (localStorage.getItem(MARI_SEED_KEY)) return library
-    const existing = library.flows.some((flow) => flow.doc?.templateId === 'mari-suporte-30d')
-    if (!existing) {
-      const template = TEMPLATES.find((item) => item.id === 'mari-suporte-30d')
-      if (template) {
-        const supportDoc = createDocFromTemplate(template)
-        library.flows.push(makeFlowRecord({
-          doc: supportDoc,
-          view: { x: 100, y: 80, zoom: 0.3 },
-        }))
+    const template = TEMPLATES.find((item) => item.id === 'mari-suporte-30d')
+    if (!template) return library
+    const candidates = library.flows.filter((flow) => flow.doc?.templateId === template.id)
+    let target = candidates.find((flow) => flow.id === library.activeId)
+      || candidates.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0]
+
+    if (!target) {
+      // Se o autor já apagou o rascunho de propósito, não recriar.
+      if (localStorage.getItem(MARI_SEED_KEY)) return library
+      const supportDoc = createDocFromTemplate(template)
+      supportDoc.templateRevision = template.revision || 1
+      target = makeFlowRecord({
+        doc: supportDoc,
+        view: { x: 100, y: 80, zoom: 0.3 },
+      })
+      library.flows.push(target)
+      if (!library.activeId) library.activeId = target.id
+    } else {
+      const currentRevision = Number(target.doc?.templateRevision) || 1
+      if (currentRevision < (Number(template.revision) || 1)) {
+        const previousDoc = target.doc || {}
+        const replacement = createDocFromTemplate(template)
+        replacement.title = previousDoc.title?.trim() || replacement.title
+        replacement.library = mergeLibraries(previousDoc.library || [], replacement.library || [])
+        replacement.templateRevision = template.revision || 1
+        target.doc = replacement
+        target.updatedAt = Date.now()
       }
     }
-    saveFlowLibrary(library)
     localStorage.setItem(MARI_SEED_KEY, '1')
+    saveFlowLibrary(library)
   } catch {
     // Se o armazenamento local estiver indisponível, o fluxo ainda pode ser aplicado pelos modelos.
   }
@@ -121,13 +138,13 @@ export default function App() {
   const boot = useMemo(() => {
     const saved = loadFlowLibrary()
     if (saved?.flows?.length) {
+      prepareSupportFlow(saved)
       const active = saved.flows.find((flow) => flow.id === saved.activeId) || saved.flows[0]
       const nextDoc = normalizeDoc(active.doc)
       const nextView = isValidView(active.view) ? active.view : DEFAULT_VIEW()
       active.doc = nextDoc
       active.view = nextView
       saved.activeId = active.id
-      ensureSupportFlow(saved)
       saveFlowLibrary(saved)
       return { library: saved, doc: nextDoc, view: nextView, activeId: active.id }
     }
@@ -135,7 +152,7 @@ export default function App() {
     const legacyView = loadView()
     const nextView = isValidView(legacyView) ? legacyView : DEFAULT_VIEW()
     const record = makeFlowRecord({ doc: nextDoc, view: nextView })
-    const library = ensureSupportFlow({ version: 1, activeId: record.id, flows: [record] })
+    const library = prepareSupportFlow({ version: 1, activeId: record.id, flows: [record] })
     saveFlowLibrary(library)
     return { library, doc: nextDoc, view: nextView, activeId: record.id }
   }, [])

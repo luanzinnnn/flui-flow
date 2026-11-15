@@ -316,6 +316,7 @@ export function createDocFromTemplate(template) {
   return {
     version: 3,
     templateId: clone?.id || 'blank',
+    templateRevision: clone?.revision || 1,
     title: clone?.title || 'Fluxo sem título',
     nodes: clone?.nodes || [
       node('blank-start', 'start', 420, 360),
