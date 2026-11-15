@@ -284,6 +284,19 @@ export default function Inspector({
               </Section>
             )}
 
+            <Section title="Nota interna" aside={<span className="section-count">não enviada</span>}>
+              <textarea
+                id={`node-note-${node.id}`}
+                className="text-area note-area"
+                value={node.note || ''}
+                placeholder="Contexto para você e para o Copiloto. Não aparece para o cliente."
+                rows={5}
+                onChange={(e) => onPatchNode({ note: e.target.value }, `node-note:${node.id}`)}
+                maxLength={8000}
+              />
+              <p className="field-hint">Fica fora da mensagem: serve para variações, instruções da equipe e pendências de revisão.</p>
+            </Section>
+
             <Section title="Aparência">
               <div className="swatch-grid">
                 {NODE_ACCENTS.map((color) => (

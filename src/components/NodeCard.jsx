@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight, AudioLines, Clock3, Film, GitBranch, GripVertical, Image as ImageIcon,
-  ImagePlus, Layers, Mic, Play, Plus, SlidersHorizontal, Type, Video,
+  ImagePlus, Layers, Mic, Play, Plus, SlidersHorizontal, StickyNote, Type, Video,
 } from 'lucide-react'
 import { BLOCK_META, NODE_TYPES } from '../data/flowData'
 import { useMediaSrc } from '../lib/useMediaSrc'
@@ -289,6 +289,7 @@ export default function NodeCard({
             </span>
             <span className="node-kind">{headerLabel}</span>
             {message && blocks.length > 1 && <span className="node-block-count">{blocks.length}</span>}
+            {node.note?.trim() && <span className="node-note-badge" title="Este balão tem uma nota interna"><StickyNote size={11} /> nota</span>}
             <button
               type="button"
               className="node-open"

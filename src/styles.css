@@ -4202,3 +4202,21 @@ body.is-pinching * { cursor: grabbing !important; }
   .assistant-file-drop { inset: 8px; }
   .assistant-msg-file > span { max-width: 145px; }
 }
+
+
+.node-note-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 1px;
+  padding: 2px 5px;
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  border-radius: 4px;
+  background: rgba(251, 191, 36, 0.055);
+  color: rgba(251, 191, 36, 0.58);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.note-area { min-height: 96px; }

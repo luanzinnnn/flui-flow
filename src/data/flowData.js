@@ -1,3 +1,5 @@
+import { MARI_SUPPORT_TEMPLATE } from './mariFlow.js'
+
 export const EDGE_COLORS = [
   { name: 'Violeta', value: '#8b5cf6' },
   { name: 'Ciano', value: '#22d3ee' },
@@ -271,6 +273,7 @@ export const TEMPLATES = [
     nodes: leadNodes,
     edges: leadEdges,
   },
+  MARI_SUPPORT_TEMPLATE,
 ]
 
 const SEED_LABELS = {

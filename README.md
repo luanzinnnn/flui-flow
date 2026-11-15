@@ -19,7 +19,7 @@
 - **Mídia de verdade** — envie imagens, vídeos e áudios (ou grave um áudio direto do microfone). Os arquivos ficam no IndexedDB do navegador.
 - **Copiloto DeepSeek** — um chat com contexto do fluxo inteiro (balões, mensagens, caminhos e foco atual) para perguntar o que responder, revisar mensagens e destravar caminhos. Ele não finge analisar áudios/fotos/vídeos; trabalha com os textos, tipos e nomes de arquivo. Abra com `K`, conecte sua chave DeepSeek e use uma das skills rápidas. Você pode anexar arquivos de texto, PDF, DOCX e XLSX no chat — o conteúdo é extraído no navegador e enviado junto com a sua pergunta para a DeepSeek.
 - **Prévia interativa** — percorra o fluxo dentro de um celular, com o conteúdo composto de cada balão. Caminhos com uma única saída seguem sozinhos; onde há uma condição, você escolhe a resposta.
-- **Galeria de modelos** — três fluxos prontos para editar (boas-vindas, recuperação de carrinho e qualificação de lead), além de uma folha em branco. Aplicar um modelo cria um novo fluxo salvo, sem sobrescrever o atual. A biblioteca de mídias vem com exemplos prontos.
+- **Galeria de modelos** — quatro fluxos prontos (boas-vindas, recuperação de carrinho, qualificação de lead e o rascunho **Suporte Mari Trader — 30 dias**, com 37 caminhos e notas internas), além de uma folha em branco. Aplicar um modelo cria um novo fluxo salvo, sem sobrescrever o atual. A biblioteca de mídias vem com exemplos prontos.
 - **Atalhos** — desfazer/refazer, duplicar, excluir, enquadrar, zoom de 100%, biblioteca (`M`), fluxos (`F`), salvar (`⌘S`) e mais. Pressione `?` ou abra o menu `···` → “Atalhos e dicas”.
 
 ## Rodando localmente
