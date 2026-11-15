@@ -8,6 +8,7 @@ const TYPE_LABEL = {
   video: 'mensagem com vídeo',
   condition: 'condição',
   delay: 'espera',
+  reference: 'atalho para outro fluxo',
 }
 
 const BLOCK_LABEL = { text: 'texto', audio: 'áudio', image: 'foto', video: 'vídeo' }
@@ -61,6 +62,9 @@ function serializeNode(node, edgeMap, nodeMap, focusId) {
     lines.push(`  espera: ${node.delay?.value ?? 2} ${node.delay?.unit || 'horas'}`)
   } else if (node.type === 'start') {
     lines.push('  gatilho do fluxo')
+  } else if (node.type === 'reference') {
+    lines.push(`  atalho para o fluxo: ${text(node.targetFlowTitle, 200) || '(não informado)'}`)
+    lines.push(`  caminho de destino: ${text(node.targetNodeTitle, 300) || '(não informado)'}`)
   }
   if (out.length) {
     lines.push('  saídas:')

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import {
-  ArrowRight, ChevronRight, Clock3, Copy, GitBranch, Image as ImageIcon,
+  ArrowRight, ArrowUpRight, ChevronRight, Clock3, Copy, GitBranch, Image as ImageIcon,
   Layers, Link2, Mic, Trash2, Type, Video, X,
 } from 'lucide-react'
 import { EDGE_COLORS, NODE_ACCENTS, NODE_TYPES } from '../data/flowData'
@@ -15,6 +15,7 @@ const NODE_ICON = {
   condition: GitBranch,
   delay: Clock3,
   start: PlayIcon,
+  reference: ArrowUpRight,
 }
 
 function PlayIcon(props) {
@@ -76,7 +77,7 @@ export default function Inspector({
   onClose, onPatchNode, onPatchEdge, onDelete, onDuplicate,
   onPatchBlock, onAddTextBlock, onAddAudioBlock, onOpenLibrary,
   onPickBlockMedia, onRemoveBlock, onMoveBlock, onBlockRecorded,
-  onSelectEdge, onError,
+  onSelectEdge, onOpenReference, onError,
 }) {
   const scrollRef = useRef(null)
   const selectionKey = selected ? `${selected.type}:${selected.id}` : ''
@@ -86,6 +87,49 @@ export default function Inspector({
   }, [selectionKey])
 
   if (!selected) return null
+
+  if (selected.type === 'node' && node?.type === 'reference') {
+    return (
+      <aside className="inspector" key={selectionKey} aria-label="Atalho entre fluxos">
+        <div className="inspector-head">
+          <span className="inspector-eyebrow"><ArrowUpRight size={12} /> atalho</span>
+          <button type="button" className="panel-close" onClick={onClose} aria-label="Fechar painel"><X size={16} /></button>
+        </div>
+        <div className="inspector-scroll" ref={scrollRef}>
+          <div className="inspector-title-block">
+            <h2>Uma ponte entre <em>fluxos.</em></h2>
+            <p>Este cartão continua o atendimento em outro fluxo. Use o mapa ou a lista de fluxos para voltar.</p>
+          </div>
+
+          <Section title="Fluxo de destino">
+            <div className="reference-target-card">
+              <i style={{ background: node.accent || '#c4b5fd' }} />
+              <div>
+                <small>{node.targetFlowTitle || 'Outro fluxo'}</small>
+                <strong>{node.targetNodeTitle || node.title || 'Caminho de destino'}</strong>
+              </div>
+            </div>
+          </Section>
+
+          <button type="button" className="reference-open-btn" onClick={() => onOpenReference?.(node)}>
+            Abrir fluxo de destino <ArrowUpRight size={14} />
+          </button>
+
+          {node.note?.trim() && (
+            <Section title="Nota interna">
+              <p className="field-hint">{node.note}</p>
+            </Section>
+          )}
+
+          <div className="inspector-actions">
+            <button type="button" className="danger-btn" onClick={onDelete}>
+              <Trash2 size={14} /> Excluir atalho
+            </button>
+          </div>
+        </div>
+      </aside>
+    )
+  }
 
   if (selected.type === 'edge' && edge) {
     return (

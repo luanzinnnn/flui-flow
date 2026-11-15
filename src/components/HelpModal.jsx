@@ -78,7 +78,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><Save size={17} /></span>
             <h3>Vários fluxos salvos</h3>
-            <p>Clique no <strong>logo do flui</strong> (ou pressione F) para abrir a barra de fluxos: criar outro, voltar aos anteriores, duplicar ou renomear. Tudo salva automático neste navegador; o botão “salvo” também salva na hora.</p>
+            <p>Clique no <strong>logo do flui</strong> (ou pressione F) para abrir a barra de fluxos: criar outro, voltar aos anteriores, duplicar ou renomear. Tudo salva automático neste navegador; o botão “salvo” também salva na hora. O pacote da Mari já vem como um mapa mais seis grupos; os cartões de atalho levam de um fluxo a outro.</p>
           </div>
         </div>
 

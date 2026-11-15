@@ -16,6 +16,10 @@ import AssistantPanel from './components/AssistantPanel.jsx'
 import FlowsSidebar from './components/FlowsSidebar.jsx'
 import Toast from './components/Toast.jsx'
 import {
+  MARI_GROUP_DEFS, MARI_GROUP_TEMPLATES, MARI_MAP_FLOW_ID, MARI_MAP_TEMPLATE,
+  MARI_OLD_TEMPLATE_ID, MARI_PACK_MARKER, MARI_PACK_REVISION,
+} from './data/mariSplit.js'
+import {
   createBlankDoc, createDocFromTemplate, EDGE_COLORS, ESTIMATED_HEIGHT,
   NODE_TYPES, TEMPLATES, nodeHeight, uid,
 } from './data/flowData.js'
@@ -95,41 +99,75 @@ function edgeLabelFor(source, outCount) {
 
 const MARI_SEED_KEY = 'flui:mari-support-seeded:v1'
 
-function prepareSupportFlow(library) {
-  try {
-    const template = TEMPLATES.find((item) => item.id === 'mari-suporte-30d')
-    if (!template) return library
-    const candidates = library.flows.filter((flow) => flow.doc?.templateId === template.id)
-    let target = candidates.find((flow) => flow.id === library.activeId)
-      || candidates.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0]
+function packView() {
+  const width = window.innerWidth
+  const wide = width >= 1400
+  const mid = width >= 900
+  return {
+    map: { x: 110, y: 150, zoom: wide ? 0.72 : mid ? 0.58 : 0.32 },
+    group: { x: 40, y: 60, zoom: wide ? 0.62 : mid ? 0.5 : 0.28 },
+  }
+}
 
-    if (!target) {
-      // Se o autor já apagou o rascunho de propósito, não recriar.
-      if (localStorage.getItem(MARI_SEED_KEY)) return library
-      const supportDoc = createDocFromTemplate(template)
-      supportDoc.templateRevision = template.revision || 1
-      target = makeFlowRecord({
-        doc: supportDoc,
-        view: { x: 100, y: 80, zoom: 0.3 },
-      })
-      library.flows.push(target)
-      if (!library.activeId) library.activeId = target.id
-    } else {
-      const currentRevision = Number(target.doc?.templateRevision) || 1
-      if (currentRevision < (Number(template.revision) || 1)) {
-        const previousDoc = target.doc || {}
-        const replacement = createDocFromTemplate(template)
-        replacement.title = previousDoc.title?.trim() || replacement.title
-        replacement.library = mergeLibraries(previousDoc.library || [], replacement.library || [])
-        replacement.templateRevision = template.revision || 1
-        target.doc = replacement
-        target.updatedAt = Date.now()
-      }
+function prepareMariPack(library) {
+  try {
+    if (localStorage.getItem(MARI_PACK_MARKER)) return library
+
+    const oldMari = library.flows.filter((flow) => flow.doc?.templateId === MARI_OLD_TEMPLATE_ID)
+    const hadOldSeed = Boolean(localStorage.getItem(MARI_SEED_KEY))
+    // Se a pessoa apagou o rascunho antigo de propósito, não recriar o pacote inteiro.
+    if (!oldMari.length && hadOldSeed) {
+      localStorage.setItem(MARI_PACK_MARKER, String(MARI_PACK_REVISION))
+      return library
     }
-    localStorage.setItem(MARI_SEED_KEY, '1')
-    saveFlowLibrary(library)
+
+    const pack = {
+      map: normalizeDoc(structuredClone(MARI_MAP_TEMPLATE)),
+      groups: MARI_GROUP_TEMPLATES.map((doc) => normalizeDoc(structuredClone(doc))),
+    }
+    const oldIds = new Set(oldMari.map((flow) => flow.id))
+    const packIds = new Set([
+      MARI_MAP_FLOW_ID,
+      ...MARI_GROUP_DEFS.map((def) => def.flowId),
+    ])
+
+    library.flows = library.flows.filter((flow) => !oldIds.has(flow.id) && !packIds.has(flow.id))
+    const base = Date.now()
+    const views = packView()
+    const mapRecord = makeFlowRecord({
+      id: MARI_MAP_FLOW_ID,
+      doc: pack.map,
+      view: views.map,
+      createdAt: base,
+      updatedAt: base,
+    })
+    mapRecord.fitOnOpen = true
+    library.flows.push(mapRecord)
+
+    pack.groups.forEach((doc, index) => {
+      const def = MARI_GROUP_DEFS[index]
+      const groupRecord = makeFlowRecord({
+        id: def.flowId,
+        doc,
+        view: views.group,
+        createdAt: base - index - 1,
+        updatedAt: base - index - 1,
+      })
+      groupRecord.fitOnOpen = true
+      library.flows.push(groupRecord)
+    })
+
+    if (oldIds.has(library.activeId) || !library.flows.some((flow) => flow.id === library.activeId)) {
+      library.activeId = MARI_MAP_FLOW_ID
+    }
+
+    const ok = saveFlowLibrary(library)
+    if (ok) {
+      localStorage.setItem(MARI_PACK_MARKER, String(MARI_PACK_REVISION))
+      localStorage.setItem(MARI_SEED_KEY, '1')
+    }
   } catch {
-    // Se o armazenamento local estiver indisponível, o fluxo ainda pode ser aplicado pelos modelos.
+    // Sem armazenamento local, o pacote ainda pode ser recriado na próxima tentativa.
   }
   return library
 }
@@ -138,7 +176,7 @@ export default function App() {
   const boot = useMemo(() => {
     const saved = loadFlowLibrary()
     if (saved?.flows?.length) {
-      prepareSupportFlow(saved)
+      prepareMariPack(saved)
       const active = saved.flows.find((flow) => flow.id === saved.activeId) || saved.flows[0]
       const nextDoc = normalizeDoc(active.doc)
       const nextView = isValidView(active.view) ? active.view : DEFAULT_VIEW()
@@ -146,15 +184,15 @@ export default function App() {
       active.view = nextView
       saved.activeId = active.id
       saveFlowLibrary(saved)
-      return { library: saved, doc: nextDoc, view: nextView, activeId: active.id }
+      return { library: saved, doc: nextDoc, view: nextView, activeId: active.id, fitOnOpen: Boolean(active.fitOnOpen) }
     }
     const nextDoc = normalizeDoc(loadDoc() || createDocFromTemplate(TEMPLATES[0]))
     const legacyView = loadView()
     const nextView = isValidView(legacyView) ? legacyView : DEFAULT_VIEW()
     const record = makeFlowRecord({ doc: nextDoc, view: nextView })
-    const library = prepareSupportFlow({ version: 1, activeId: record.id, flows: [record] })
+    const library = prepareMariPack({ version: 1, activeId: record.id, flows: [record] })
     saveFlowLibrary(library)
-    return { library, doc: nextDoc, view: nextView, activeId: record.id }
+    return { library, doc: nextDoc, view: nextView, activeId: record.id, fitOnOpen: false }
   }, [])
 
   const {
@@ -180,7 +218,7 @@ export default function App() {
   const [modal, setModal] = useState(null)
   const [toast, setToast] = useState(null)
   const [saveState, setSaveState] = useState('saved')
-  const [fitting, setFitting] = useState(false)
+  const [fitting, setFitting] = useState(Boolean(boot.fitOnOpen))
   const [activeFlowId, setActiveFlowId] = useState(boot.activeId)
   const [flowList, setFlowList] = useState(() => boot.library.flows.map(summarizeFlow))
   const libraryRef = useRef(boot.library)
@@ -1232,7 +1270,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(String(reader.result))
         if (!parsed || !Array.isArray(parsed.nodes) || !parsed.nodes.length) throw new Error('sem nós')
-        const allowed = new Set(['text', 'audio', 'image', 'video', 'condition', 'delay', 'start'])
+        const allowed = new Set(['text', 'audio', 'image', 'video', 'condition', 'delay', 'start', 'reference'])
         const nodes = parsed.nodes
           .filter((n) => n && typeof n.id === 'string' && allowed.has(n.type) && Number.isFinite(n.x) && Number.isFinite(n.y))
           .map((n) => ({
@@ -1241,6 +1279,13 @@ export default function App() {
             accent: n.accent || NODE_TYPES[n.type].accent,
             title: String(n.title || ''),
             ...(n.type === 'condition' ? { text: String(n.text || '') } : {}),
+            ...(n.type === 'reference' ? {
+              targetFlowId: String(n.targetFlowId || ''),
+              targetFlowTitle: String(n.targetFlowTitle || ''),
+              targetNodeId: String(n.targetNodeId || ''),
+              targetNodeTitle: String(n.targetNodeTitle || ''),
+              description: String(n.description || ''),
+            } : {}),
           }))
         if (!nodes.length) throw new Error('nenhum nó válido')
         const ids = new Set(nodes.map((n) => n.id))
@@ -1501,15 +1546,40 @@ export default function App() {
     setFlowsOpen(true)
   }, [flowsOpen, saveActiveFlow])
 
-  const openSavedFlow = useCallback((id) => {
+  const focusNodeInCanvas = useCallback((target) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!target || !rect) return
+    const zoom = Math.max(viewRef.current.zoom, 0.82)
+    const rightInset = window.innerWidth > 900 ? 388 : 0
+    const availableWidth = Math.max(320, rect.width - rightInset)
+    const nodeW = sizesRef.current[target.id]?.w || target.w || 304
+    const nodeH = sizesRef.current[target.id]?.h || nodeHeight(target)
+    commitView({
+      zoom,
+      x: availableWidth / 2 - (target.x + nodeW / 2) * zoom,
+      y: rect.height / 2 - (target.y + nodeH / 2) * zoom,
+    })
+    setSelected({ type: 'node', id: target.id })
+    setEditingBlock(null)
+    setEdgeHover(null)
+  }, [commitView])
+
+  const openSavedFlow = useCallback((id, targetNodeId = null) => {
     if (id === activeFlowId) {
       setFlowsOpen(false)
+      if (targetNodeId) {
+        const target = docRef.current.nodes.find((node) => node.id === targetNodeId)
+        if (target) focusNodeInCanvas(target)
+      }
       return
     }
     saveActiveFlow({ silent: true })
     const library = libraryRef.current
     const record = library.flows.find((flow) => flow.id === id)
-    if (!record) return
+    if (!record) {
+      notify('Esse fluxo de destino não existe mais.', { tone: 'error' })
+      return
+    }
     const nextDoc = normalizeDoc(record.doc)
     const nextView = isValidView(record.view) ? record.view : DEFAULT_VIEW()
     record.doc = nextDoc
@@ -1518,8 +1588,29 @@ export default function App() {
     saveFlowLibrary(library)
     refreshFlowList()
     loadRecord(record)
+    if (targetNodeId) {
+      setFitting(true)
+      window.setTimeout(() => {
+        const target = record.doc.nodes.find((node) => node.id === targetNodeId)
+        if (target) {
+          setSelected({ type: 'node', id: target.id })
+          setEditingBlock(null)
+          setEdgeHover(null)
+        }
+      }, 90)
+    } else if (record.fitOnOpen) {
+      setFitting(true)
+    }
     notify(`Fluxo “${nextDoc.title?.trim() || 'sem título'}” aberto.`)
-  }, [activeFlowId, loadRecord, notify, refreshFlowList, saveActiveFlow])
+  }, [activeFlowId, focusNodeInCanvas, loadRecord, notify, refreshFlowList, saveActiveFlow])
+
+  const openReferenceFlow = useCallback((node) => {
+    if (!node?.targetFlowId) {
+      notify('Este atalho ainda não aponta para um fluxo.', { tone: 'error' })
+      return
+    }
+    openSavedFlow(node.targetFlowId, node.targetNodeId)
+  }, [notify, openSavedFlow])
 
   const duplicateFlow = useCallback((id) => {
     saveActiveFlow({ silent: true })
@@ -1697,22 +1788,14 @@ export default function App() {
 
   const navigateToEdgeTarget = useCallback((edge) => {
     const target = docRef.current.nodes.find((node) => node.id === edge.to)
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!target || !rect) return
-    const zoom = Math.max(viewRef.current.zoom, 0.82)
-    const rightInset = window.innerWidth > 900 ? (assistantOpen ? 404 : 388) : 0
-    const availableWidth = Math.max(320, rect.width - rightInset)
-    const nodeW = sizesRef.current[target.id]?.w || target.w || 304
-    const nodeH = sizesRef.current[target.id]?.h || nodeHeight(target)
-    setEdgeHover(null)
-    commitView({
-      zoom,
-      x: availableWidth / 2 - (target.x + nodeW / 2) * zoom,
-      y: rect.height / 2 - (target.y + nodeH / 2) * zoom,
-    })
-    setSelected({ type: 'node', id: target.id })
-    setEditingBlock(null)
-  }, [assistantOpen, commitView, docRef])
+    if (!target) return
+    if (target.type === 'reference' && target.targetFlowId) {
+      setEdgeHover(null)
+      openSavedFlow(target.targetFlowId, target.targetNodeId)
+      return
+    }
+    focusNodeInCanvas(target)
+  }, [docRef, focusNodeInCanvas, openSavedFlow])
 
   const handleNodeDoubleClick = useCallback((node) => {
     setSelected({ type: 'node', id: node.id })
@@ -2064,6 +2147,7 @@ export default function App() {
               onPickBlockMedia={openBlockPicker}
               onDropAsset={handleDropAsset}
               onDropFiles={handleNodeDropFiles}
+              onOpenReference={openReferenceFlow}
             />
           ))}
         </div>
@@ -2216,6 +2300,7 @@ export default function App() {
         onMoveBlock={moveBlock}
         onBlockRecorded={handleBlockRecorded}
         onSelectEdge={(id) => { setSelected({ type: 'edge', id }); setEditingBlock(null) }}
+        onOpenReference={openReferenceFlow}
         onError={(message) => notify(message, { tone: 'error' })}
       />
 

@@ -113,6 +113,7 @@ function EdgeLayer({
           const related = Boolean(selectedNodeId && (edge.from === selectedNodeId || edge.to === selectedNodeId))
           const shouldShow = selected || (!overview && (!heavy ? showLabels : related))
           if (!shouldShow) return null
+          if (edge.hideLabel && !selected) return null
           if (!edge.label && !selected) return null
           return (
             <button

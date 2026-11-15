@@ -62,6 +62,7 @@ function TypePill({ type, kinds }) {
     audio: [AudioLines, 'áudio'],
     image: [ImageIcon, 'foto'],
     video: [Film, 'vídeo'],
+    reference: [ArrowUpRight, 'atalho'],
     text: null,
     content: [Layers, 'conteúdo'],
   }
@@ -298,7 +299,13 @@ export default function PreviewModal({ nodes, edges, docTitle, onClose }) {
                         </div>
                       ) : (
                         <div className="chat-bubble bot-bubble" style={{ '--bubble-color': node.accent }}>
-                          {node.type === 'condition' ? (
+                          {node.type === 'reference' ? (
+                            <div className="chat-reference">
+                              <span>continua em outro fluxo</span>
+                              <strong>{node.targetFlowTitle || 'Fluxo de destino'}</strong>
+                              <small>{node.targetNodeTitle || node.title || 'Caminho de destino'}</small>
+                            </div>
+                          ) : node.type === 'condition' ? (
                             <>
                               <div className="chat-condition-title"><GitBranch size={12} /> {node.title || 'Escolha um caminho'}</div>
                               {node.text && <p><RichText text={node.text} /></p>}

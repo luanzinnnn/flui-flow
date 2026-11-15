@@ -4346,3 +4346,97 @@ body.is-pinching * { cursor: grabbing !important; }
 @media (hover: none) {
   .edge-hover-card { display: none; }
 }
+
+/* Atalhos entre fluxos */
+.node-reference {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent, #c4b5fd) 26%, rgba(255, 255, 255, 0.08));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent, #c4b5fd) 8%, transparent), transparent 60%),
+    linear-gradient(160deg, #171923 0%, #10111a 100%);
+}
+.node-reference::before { opacity: 0.42; }
+.reference-body { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; }
+.reference-flow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--accent, #c4b5fd) 72%, white);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+.reference-flow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reference-body .node-title { font-size: 15px; line-height: 1.3; }
+.reference-description {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.reference-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent, #c4b5fd) 30%, rgba(255, 255, 255, 0.06));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent, #c4b5fd) 11%, rgba(255, 255, 255, 0.02));
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
+}
+.reference-open:hover {
+  border-color: color-mix(in srgb, var(--accent, #c4b5fd) 55%, transparent);
+  background: color-mix(in srgb, var(--accent, #c4b5fd) 18%, rgba(255, 255, 255, 0.03));
+  color: white;
+}
+.reference-target-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.reference-target-card > i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  margin-top: 5px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+.reference-target-card > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.reference-target-card small { color: rgba(255, 255, 255, 0.32); font-size: 10px; line-height: 1.3; }
+.reference-target-card strong { color: rgba(255, 255, 255, 0.78); font-size: 12px; font-weight: 550; line-height: 1.35; }
+.reference-open-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 10px;
+  border: 1px solid rgba(196, 181, 253, 0.28);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.22), rgba(139, 92, 246, 0.12));
+  color: rgba(245, 242, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s;
+}
+.reference-open-btn:hover { border-color: rgba(196, 181, 253, 0.55); background: linear-gradient(180deg, rgba(139, 92, 246, 0.32), rgba(139, 92, 246, 0.18)); }
+.chat-reference { display: flex; flex-direction: column; gap: 3px; }
+.chat-reference > span { color: rgba(255, 255, 255, 0.36); font-size: 10px; letter-spacing: 0.02em; }
+.chat-reference > strong { color: rgba(255, 255, 255, 0.82); font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+.chat-reference > small { color: rgba(255, 255, 255, 0.48); font-size: 11px; line-height: 1.4; }
+.chat-type-pill.type-reference { color: #c4b5fd; border-color: rgba(196, 181, 253, 0.24); background: rgba(196, 181, 253, 0.08); }

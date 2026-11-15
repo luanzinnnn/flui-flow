@@ -1,5 +1,3 @@
-import { MARI_SUPPORT_TEMPLATE } from './mariFlow.js'
-
 export const EDGE_COLORS = [
   { name: 'Violeta', value: '#8b5cf6' },
   { name: 'Ciano', value: '#22d3ee' },
@@ -24,6 +22,7 @@ export const NODE_TYPES = {
   condition: { label: 'Condição', kicker: 'Ramificação', accent: '#bef264' },
   delay: { label: 'Espera', kicker: 'Automação', accent: '#fda4af' },
   start: { label: 'Início', kicker: 'Gatilho', accent: '#a3e635' },
+  reference: { label: 'Atalho', kicker: 'Outro fluxo', accent: '#c4b5fd' },
 }
 
 export const BLOCK_META = {
@@ -41,6 +40,7 @@ export const ESTIMATED_HEIGHT = {
   condition: 170,
   delay: 142,
   start: 58,
+  reference: 154,
 }
 
 export const TYPE_ORDER = ['text', 'audio', 'image', 'video', 'condition', 'delay']
@@ -273,7 +273,6 @@ export const TEMPLATES = [
     nodes: leadNodes,
     edges: leadEdges,
   },
-  MARI_SUPPORT_TEMPLATE,
 ]
 
 const SEED_LABELS = {
@@ -339,6 +338,7 @@ export function nodeHeight(node) {
   if (node.type === 'start') return 58
   if (node.type === 'condition') return 174
   if (node.type === 'delay') return 142
+  if (node.type === 'reference') return 154
   let height = 106
   if (node.title) height += 30
   const blocks = Array.isArray(node.blocks) ? node.blocks : []

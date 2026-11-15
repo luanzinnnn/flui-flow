@@ -16,6 +16,7 @@ const TYPE_ICON = {
   video: Video,
   condition: GitBranch,
   delay: Clock3,
+  reference: ArrowUpRight,
 }
 
 const BLOCK_ICON = {
@@ -160,7 +161,7 @@ function NodeCard({
   node, selected, isTarget, connecting, editingBlockId, outEdges, compact,
   onMeasure, onPointerDown, onStartConnect, onOpen, onDoubleClick,
   onStartEditBlock, onBlockTextChange, onEndEditBlock, onPickBlockMedia,
-  onDropAsset, onDropFiles,
+  onDropAsset, onDropFiles, onOpenReference,
 }) {
   const ref = useRef(null)
   const dragDepth = useRef(0)
@@ -248,6 +249,7 @@ function NodeCard({
     dragOver ? 'is-drop-target' : '',
     node.type === 'condition' ? 'node-condition' : '',
     node.type === 'delay' ? 'node-delay' : '',
+    node.type === 'reference' ? 'node-reference' : '',
     compactView ? 'is-compact' : '',
   ].filter(Boolean).join(' ')
 
@@ -297,6 +299,7 @@ function NodeCard({
             {node.title?.trim() || (node.type === 'condition' ? 'Nova condição' : node.type === 'delay' ? 'Nova espera' : (blocks.find((b) => b.kind === 'text')?.text?.slice(0, 70) || 'Balão'))}
           </h3>
           {node.type === 'condition' && node.text && <p className="node-compact-text">{node.text}</p>}
+          {node.type === 'reference' && node.targetFlowTitle && <p className="node-compact-text">{node.targetFlowTitle}</p>}
         </div>
       ) : (
         <>
@@ -307,7 +310,7 @@ function NodeCard({
             </span>
             <span className="node-kind">{headerLabel}</span>
             {message && blocks.length > 1 && <span className="node-block-count">{blocks.length}</span>}
-            {node.note?.trim() && <span className="node-note-badge" title="Este balão tem uma nota interna"><StickyNote size={11} /> nota</span>}
+            {node.note?.trim() && node.type !== 'reference' && <span className="node-note-badge" title="Este balão tem uma nota interna"><StickyNote size={11} /> nota</span>}
             <button
               type="button"
               className="node-open"
@@ -321,7 +324,25 @@ function NodeCard({
             <span className="node-grip" aria-hidden="true"><GripVertical size={14} /></span>
           </div>
 
-          {node.type === 'condition' ? (
+          {node.type === 'reference' ? (
+            <div className="reference-body">
+              <div className="reference-flow">
+                <ArrowUpRight size={11} />
+                <span>{node.targetFlowTitle || 'Outro fluxo'}</span>
+              </div>
+              <h3 className="node-title">{node.title || node.targetNodeTitle || 'Ir para outro fluxo'}</h3>
+              {node.description && <p className="reference-description">{node.description}</p>}
+              <button
+                type="button"
+                className="reference-open"
+                data-no-drag
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onOpenReference?.(node) }}
+              >
+                Abrir fluxo <ArrowUpRight size={12} />
+              </button>
+            </div>
+          ) : node.type === 'condition' ? (
             <div className="condition-body">
               <div className="condition-flag"><GitBranch size={11} /> se</div>
               <h3 className="node-title">{node.title || 'Nova condição'}</h3>
@@ -393,7 +414,7 @@ function NodeCard({
             </div>
           ) : null}
 
-          {!start && (
+          {!start && node.type !== 'reference' && (
             <div className="node-foot">
               <div className="foot-dots">
                 {outEdges.slice(0, 4).map((e) => <i key={e.id} style={{ background: e.color }} />)}
@@ -428,17 +449,19 @@ function NodeCard({
           <span className="port-core" />
         </div>
       )}
-      <div
-        className="port port-out"
-        role="button"
-        aria-label="Arraste para conectar"
-        title="Arraste para conectar"
-        data-no-drag
-        onPointerDown={(e) => onStartConnect(e, node)}
-      >
-        <span className="port-core" />
-        <span className="port-plus"><Plus size={10} /></span>
-      </div>
+      {node.type !== 'reference' && (
+        <div
+          className="port port-out"
+          role="button"
+          aria-label="Arraste para conectar"
+          title="Arraste para conectar"
+          data-no-drag
+          onPointerDown={(e) => onStartConnect(e, node)}
+        >
+          <span className="port-core" />
+          <span className="port-plus"><Plus size={10} /></span>
+        </div>
+      )}
       {selected && <span className="node-selected-ring" aria-hidden="true" />}
     </div>
   )
