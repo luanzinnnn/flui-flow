@@ -9,7 +9,7 @@ export default function TopBar({
   title, onTitleChange, saveState, onUndo, onRedo, canUndo, canRedo,
   onTemplates, onTest, onExport, onImport, onCopyLink, onHelp, onNewFlow,
   onLibrary, libraryOpen, assetCount, onAssistant, assistantOpen,
-  onOpenFlows, flowCount, onSaveNow,
+  onOpenFlows, flowCount, flowsOpen, onSaveNow,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -43,22 +43,19 @@ export default function TopBar({
   return (
     <header className="topbar">
       <div className="brand-block">
-        <div className="brand">
+        <button
+          type="button"
+          className={`brand brand-button ${flowsOpen ? 'is-open' : ''}`}
+          onClick={onOpenFlows}
+          title={`Abrir fluxos salvos (F) · ${flowCount} ${flowCount === 1 ? 'fluxo' : 'fluxos'}`}
+          aria-label={`Abrir fluxos salvos (${flowCount})`}
+          aria-expanded={flowsOpen}
+        >
           <Logo size={34} />
           <span className="wordmark">flui<span>.</span></span>
           <span className="beta-pill">beta</span>
-        </div>
-        <button
-          type="button"
-          className="flows-trigger"
-          onClick={onOpenFlows}
-          title={`Fluxos salvos (F) · ${flowCount} ${flowCount === 1 ? 'fluxo' : 'fluxos'}`}
-          aria-label={`Abrir fluxos salvos (${flowCount})`}
-        >
-          <Layers size={14} />
-          <span className="flows-label">Fluxos</span>
-          <span className="flows-mobile-title">{title?.trim() || 'Fluxo'}</span>
-          <b className="flows-count">{flowCount}</b>
+          <span className="brand-flow-count"><Layers size={11} /><b>{flowCount}</b></span>
+          <span className="brand-mobile-title">{title?.trim() || 'Fluxo'}</span>
         </button>
         <span className="topbar-divider" />
         <div className="doc-block">

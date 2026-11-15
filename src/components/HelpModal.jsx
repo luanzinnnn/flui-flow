@@ -78,7 +78,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-card">
             <span className="help-card-icon"><Save size={17} /></span>
             <h3>Vários fluxos salvos</h3>
-            <p>Abra <strong>Fluxos</strong> (F) para criar vários fluxos, voltar aos anteriores, duplicar ou renomear. Tudo salva automático neste navegador; o botão “salvo” também salva na hora.</p>
+            <p>Clique no <strong>logo do flui</strong> (ou pressione F) para abrir a barra de fluxos: criar outro, voltar aos anteriores, duplicar ou renomear. Tudo salva automático neste navegador; o botão “salvo” também salva na hora.</p>
           </div>
         </div>
 

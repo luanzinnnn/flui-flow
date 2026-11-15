@@ -8,7 +8,7 @@
 
 ## O que dá para fazer
 
-- **Vários fluxos salvos** — cada fluxo funciona como um arquivo separado, com nome, conteúdo e viewport próprios. Abra **Fluxos** (`F`) para criar um novo, voltar a qualquer anterior, duplicar, renomear ou excluir. O salvamento é automático, mas você também pode salvar na hora clicando em **salvo** ou com `⌘S` / `Ctrl+S`.
+- **Vários fluxos salvos** — cada fluxo funciona como um arquivo separado, com nome, conteúdo e viewport próprios. Clique no **logo do flui** (ou pressione `F`) para abrir a barra lateral de fluxos e criar um novo, voltar a qualquer anterior, duplicar, renomear ou excluir. O salvamento é automático, mas você também pode salvar na hora clicando em **salvo** ou com `⌘S` / `Ctrl+S`.
 - **Canvas livre** — arraste o fundo para navegar, role para dar zoom, use `espaço + arrastar` para mover com precisão. Tudo é salvo automaticamente no navegador.
 - **Balões de mensagem** — texto, áudio, foto, vídeo, condição e espera. Adicione pela barra lateral, pelo duplo clique no canvas ou soltando uma conexão no vazio.
 - **Conteúdo em camadas** — um mesmo balão pode misturar texto, áudio, foto e vídeo. No painel da direita, use as setas para organizar a ordem dos blocos. O áudio não exige descrição.

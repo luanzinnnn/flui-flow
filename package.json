@@ -1,6 +1,6 @@
 {
   "name": "flui",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "flui. — estúdio visual de fluxos de mensagens com biblioteca de mídias e balões de conteúdo misto.",
   "main": "index.js",
   "scripts": {

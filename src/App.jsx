@@ -13,7 +13,7 @@ import HelpModal from './components/HelpModal.jsx'
 import PreviewModal from './components/PreviewModal.jsx'
 import MediaShelf from './components/MediaShelf.jsx'
 import AssistantPanel from './components/AssistantPanel.jsx'
-import FlowLibraryModal from './components/FlowLibraryModal.jsx'
+import FlowsSidebar from './components/FlowsSidebar.jsx'
 import Toast from './components/Toast.jsx'
 import {
   createBlankDoc, createDocFromTemplate, EDGE_COLORS, ESTIMATED_HEIGHT,
@@ -129,6 +129,7 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [flowsOpen, setFlowsOpen] = useState(false)
   const [connecting, setConnecting] = useState(null)
   const [panning, setPanning] = useState(false)
   const [draggingId, setDraggingId] = useState(null)
@@ -335,6 +336,7 @@ export default function App() {
     setEditingBlock(null)
     setLibraryOpen(false)
     setAssistantOpen(false)
+    setFlowsOpen(false)
     setConnecting(null)
     setDraggingId(null)
     setFileDragActive(false)
@@ -1134,12 +1136,16 @@ export default function App() {
 
   const openLibrary = useCallback(() => {
     setAssistantOpen(false)
+    setFlowsOpen(false)
     setLibraryOpen(true)
   }, [])
   const closeLibrary = useCallback(() => setLibraryOpen(false), [])
   const toggleLibrary = useCallback(() => {
     setLibraryOpen((open) => {
-      if (!open) setAssistantOpen(false)
+      if (!open) {
+        setAssistantOpen(false)
+        setFlowsOpen(false)
+      }
       return !open
     })
   }, [])
@@ -1147,6 +1153,7 @@ export default function App() {
     setAssistantOpen((open) => {
       if (!open) {
         setLibraryOpen(false)
+        setFlowsOpen(false)
         setEditingBlock(null)
       }
       return !open
@@ -1247,20 +1254,20 @@ export default function App() {
 
 
   const openFlowLibrary = useCallback(() => {
-    if (modal === 'flows') {
-      setModal(null)
+    if (flowsOpen) {
+      setFlowsOpen(false)
       return
     }
     saveActiveFlow({ silent: true })
     setEditingBlock(null)
     setLibraryOpen(false)
     setAssistantOpen(false)
-    setModal('flows')
-  }, [modal, saveActiveFlow])
+    setFlowsOpen(true)
+  }, [flowsOpen, saveActiveFlow])
 
   const openSavedFlow = useCallback((id) => {
     if (id === activeFlowId) {
-      setModal(null)
+      setFlowsOpen(false)
       return
     }
     saveActiveFlow({ silent: true })
@@ -1466,6 +1473,7 @@ export default function App() {
     setEditingBlock(null)
     setLibraryOpen(false)
     setAssistantOpen(false)
+    setFlowsOpen(false)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previous }
@@ -1554,6 +1562,10 @@ export default function App() {
       const typing = isTextInput(e.target)
       if (e.key === 'Escape') {
         if (modal) return
+        if (flowsOpen) {
+          setFlowsOpen(false)
+          return
+        }
         if (assistantOpen) {
           setAssistantOpen(false)
           return
@@ -1590,7 +1602,10 @@ export default function App() {
       if (!meta && e.key.toLowerCase() === 'm') {
         e.preventDefault()
         setLibraryOpen((open) => {
-          if (!open) setAssistantOpen(false)
+          if (!open) {
+            setAssistantOpen(false)
+            setFlowsOpen(false)
+          }
           return !open
         })
         return
@@ -1600,6 +1615,7 @@ export default function App() {
         setAssistantOpen((open) => {
           if (!open) {
             setLibraryOpen(false)
+            setFlowsOpen(false)
             setEditingBlock(null)
           }
           return !open
@@ -1666,7 +1682,7 @@ export default function App() {
     }
   }, [
     modal, connecting, editingBlock, selected, cancelConnecting, redo, undo, libraryOpen, assistantOpen,
-    duplicateSelection, removeSelection, zoomCenter, fitView, setZoom100, openFlowLibrary, saveNow,
+    flowsOpen, duplicateSelection, removeSelection, zoomCenter, fitView, setZoom100, openFlowLibrary, saveNow,
   ])
 
   const edgeQuickPosition = useMemo(() => {
@@ -1697,7 +1713,7 @@ export default function App() {
   const hasNodes = doc.nodes.length > 0
 
   return (
-    <div className={`app ${modal ? 'has-modal' : ''} ${libraryOpen ? 'has-library' : ''} ${assistantOpen ? 'has-assistant' : ''}`}>
+    <div className={`app ${modal ? 'has-modal' : ''} ${libraryOpen ? 'has-library' : ''} ${assistantOpen ? 'has-assistant' : ''} ${flowsOpen ? 'has-flows' : ''}`}>
       <div className="canvas-atmosphere" aria-hidden="true">
         <span className="atmo atmo-a" />
         <span className="atmo atmo-b" />
@@ -1799,6 +1815,7 @@ export default function App() {
         assistantOpen={assistantOpen}
         onOpenFlows={openFlowLibrary}
         flowCount={flowList.length}
+        flowsOpen={flowsOpen}
         onSaveNow={saveNow}
       />
 
@@ -1901,20 +1918,19 @@ export default function App() {
           currentTemplateId={doc.templateId}
         />
       )}
-      {modal === 'flows' && (
-        <FlowLibraryModal
-          flows={flowList}
-          activeId={activeFlowId}
-          saveState={saveState}
-          onClose={() => setModal(null)}
-          onOpenFlow={openSavedFlow}
-          onCreateFlow={createNewFlow}
-          onDuplicateFlow={duplicateFlow}
-          onDeleteFlow={deleteFlow}
-          onRenameFlow={renameFlow}
-          onSaveNow={saveNow}
-        />
-      )}
+      <FlowsSidebar
+        open={flowsOpen}
+        flows={flowList}
+        activeId={activeFlowId}
+        saveState={saveState}
+        onClose={() => setFlowsOpen(false)}
+        onOpenFlow={openSavedFlow}
+        onCreateFlow={createNewFlow}
+        onDuplicateFlow={duplicateFlow}
+        onDeleteFlow={deleteFlow}
+        onRenameFlow={renameFlow}
+        onSaveNow={saveNow}
+      />
       {modal === 'help' && <HelpModal onClose={() => setModal(null)} />}
       {modal === 'preview' && (
         <PreviewModal
